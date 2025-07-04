@@ -68,6 +68,86 @@ export class ContextDatabase {
         return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     }
 
+    async getContextById(id: string): Promise<ContextEntry | undefined> {
+        return this.contexts.get(id);
+    }
+
+    async updateContext(id: string, updates: Partial<Omit<ContextEntry, 'id' | 'timestamp'>>): Promise<void> {
+        const existing = this.contexts.get(id);
+        if (!existing) {
+            throw new Error(`Context with id ${id} not found`);
+        }
+
+        const updated: ContextEntry = {
+            ...existing,
+            ...updates,
+            id: existing.id, // Preserve ID
+            timestamp: existing.timestamp // Preserve original timestamp
+        };
+
+        this.contexts.set(id, updated);
+        await this.save();
+    }
+
+    async deleteContext(id: string): Promise<void> {
+        if (!this.contexts.has(id)) {
+            throw new Error(`Context with id ${id} not found`);
+        }
+        
+        this.contexts.delete(id);
+        await this.save();
+    }
+
+    async searchContexts(query: string, options: {
+        type?: string;
+        projectPath?: string;
+        tags?: string[];
+        importance?: number;
+        limit?: number;
+    } = {}): Promise<ContextEntry[]> {
+        let results = Array.from(this.contexts.values());
+
+        // Filter by project path
+        if (options.projectPath) {
+            results = results.filter(ctx => ctx.projectPath === options.projectPath);
+        }
+
+        // Filter by type
+        if (options.type && options.type !== 'all') {
+            results = results.filter(ctx => ctx.type === options.type);
+        }
+
+        // Filter by minimum importance
+        if (options.importance !== undefined) {
+            results = results.filter(ctx => ctx.importance >= options.importance!);
+        }
+
+        // Filter by tags
+        if (options.tags && options.tags.length > 0) {
+            results = results.filter(ctx => 
+                options.tags!.some(tag => ctx.tags.includes(tag))
+            );
+        }
+
+        // Text search
+        if (query && query.trim()) {
+            const searchTerm = query.toLowerCase().trim();
+            results = results.filter(ctx => 
+                ctx.content.toLowerCase().includes(searchTerm) ||
+                ctx.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+            );
+        }
+
+        // Sort by relevance (importance + timestamp)
+        results.sort((a, b) => {
+            const scoreA = a.importance + (new Date(a.timestamp).getTime() / 1000000000);
+            const scoreB = b.importance + (new Date(b.timestamp).getTime() / 1000000000);
+            return scoreB - scoreA;
+        });
+
+        return results.slice(0, options.limit || 100);
+    }
+
     private async save(): Promise<void> {
         const entries = Array.from(this.contexts.values());
         await fs.writeFile(this.dbPath, JSON.stringify(entries, null, 2));

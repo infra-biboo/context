@@ -109,10 +109,86 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                         connected: mcpConnected
                     });
                     break;
+                case 'searchContexts':
+                    const searchResults = await this.searchContexts(data.query, data.filters);
+                    webviewView.webview.postMessage({
+                        type: 'searchResults',
+                        results: searchResults,
+                        query: data.query
+                    });
+                    break;
+                case 'editContext':
+                    const contextToEdit = await this.database.getContextById(data.contextId);
+                    webviewView.webview.postMessage({
+                        type: 'editContextData',
+                        context: contextToEdit
+                    });
+                    break;
+                case 'updateContext':
+                    await this.database.updateContext(data.contextId, data.updates);
+                    vscode.window.showInformationMessage('Context updated successfully');
+                    break;
+                case 'deleteContext':
+                    await this.database.deleteContext(data.contextId);
+                    vscode.window.showInformationMessage('Context deleted');
+                    break;
             }
         });
 
         Logger.info('Webview provider initialized');
+    }
+
+    private async searchContexts(query: string, filters: any = {}) {
+        const allContexts = await this.database.getContexts();
+        
+        let filteredContexts = allContexts;
+
+        // Apply type filter
+        if (filters.type && filters.type !== 'all') {
+            filteredContexts = filteredContexts.filter(ctx => ctx.type === filters.type);
+        }
+
+        // Apply date filter
+        if (filters.dateRange) {
+            const now = new Date();
+            let startDate: Date;
+            
+            switch (filters.dateRange) {
+                case 'today':
+                    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    break;
+                case 'week':
+                    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    break;
+                case 'month':
+                    startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    break;
+                default:
+                    startDate = new Date(0);
+            }
+            
+            filteredContexts = filteredContexts.filter(ctx => 
+                new Date(ctx.timestamp) >= startDate
+            );
+        }
+
+        // Apply text search
+        if (query && query.trim()) {
+            const searchTerm = query.toLowerCase().trim();
+            filteredContexts = filteredContexts.filter(ctx => 
+                ctx.content.toLowerCase().includes(searchTerm) ||
+                ctx.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+            );
+        }
+
+        // Sort by relevance (importance + timestamp)
+        filteredContexts.sort((a, b) => {
+            const scoreA = a.importance + (new Date(a.timestamp).getTime() / 1000000000);
+            const scoreB = b.importance + (new Date(b.timestamp).getTime() / 1000000000);
+            return scoreB - scoreA;
+        });
+
+        return filteredContexts.slice(0, 50); // Limit results
     }
 
     private getHtmlForWebview(_webview: vscode.Webview) {
@@ -336,6 +412,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
             <div class="tabs">
                 <button class="tab-button active" onclick="showTab('general')">🏠 General</button>
                 <button class="tab-button" onclick="showTab('agents')">🤖 Agents</button>
+                <button class="tab-button" onclick="showTab('search')">🔍 Search</button>
             </div>
 
             <!-- General Tab -->
@@ -420,6 +497,117 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 </div>
             </div>
 
+            <!-- Search Tab -->
+            <div id="search-tab" class="tab-content">
+                <div class="status-card">
+                    <h3>🔍 Search Contexts</h3>
+                    
+                    <!-- Search Form -->
+                    <div style="margin-bottom: 16px;">
+                        <input type="text" id="search-query" placeholder="Search contexts..." 
+                               style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); 
+                                      background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                      border-radius: 4px; font-size: 12px;">
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <select id="type-filter" style="padding: 4px 8px; border: 1px solid var(--vscode-input-border); 
+                                                        background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                                        border-radius: 4px; font-size: 11px;">
+                            <option value="all">All Types</option>
+                            <option value="conversation">Conversation</option>
+                            <option value="decision">Decision</option>
+                            <option value="code">Code</option>
+                            <option value="issue">Issue</option>
+                        </select>
+                        
+                        <select id="date-filter" style="padding: 4px 8px; border: 1px solid var(--vscode-input-border); 
+                                                        background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                                        border-radius: 4px; font-size: 11px;">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                        </select>
+                        
+                        <button class="btn btn-secondary" onclick="performSearch()" style="font-size: 11px; padding: 4px 8px;">
+                            🔍 Search
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearSearch()" style="font-size: 11px; padding: 4px 8px;">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Results -->
+                <div class="status-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h3 style="margin: 0;">📋 Results</h3>
+                        <span id="search-count" style="font-size: 11px; color: var(--vscode-descriptionForeground);">0 results</span>
+                    </div>
+                    
+                    <div id="search-results" style="max-height: 400px; overflow-y: auto;">
+                        <p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">
+                            Enter a search term to find contexts
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Context Modal -->
+            <div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                                       background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px;">
+                <div style="background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border);
+                            border-radius: 6px; max-width: 500px; margin: 20px auto; padding: 20px; max-height: 80vh; overflow-y: auto;">
+                    <h3 style="margin-top: 0;">✏️ Edit Context</h3>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Content:</label>
+                        <textarea id="edit-content" rows="5" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border);
+                                                                    background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                                                    border-radius: 4px; font-size: 12px; resize: vertical;"></textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Type:</label>
+                        <select id="edit-type" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border);
+                                                     background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                                     border-radius: 4px; font-size: 12px;">
+                            <option value="conversation">Conversation</option>
+                            <option value="decision">Decision</option>
+                            <option value="code">Code</option>
+                            <option value="issue">Issue</option>
+                        </select>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Importance (1-10):</label>
+                        <input type="range" id="edit-importance" min="1" max="10" value="5" 
+                               style="width: 100%; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--vscode-descriptionForeground);">
+                            <span>1 (Low)</span>
+                            <span id="importance-value">5</span>
+                            <span>10 (High)</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Tags (comma separated):</label>
+                        <input type="text" id="edit-tags" placeholder="tag1, tag2, tag3" 
+                               style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border);
+                                      background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+                                      border-radius: 4px; font-size: 12px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                        <button class="btn" onclick="saveContext()">Save Changes</button>
+                        <button class="btn" onclick="deleteContext()" style="background: var(--vscode-errorForeground);">Delete</button>
+                    </div>
+                </div>
+            </div>
+
             <script>
                 const vscode = acquireVsCodeApi();
                 let currentAgents = [];
@@ -441,6 +629,9 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     // Load data for specific tabs
                     if (tabName === 'agents') {
                         loadAgents();
+                    } else if (tabName === 'search') {
+                        // Search tab doesn't need initial loading
+                        // User will initiate search manually
                     }
                 }
 
@@ -617,13 +808,206 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                         case 'mcpStatus':
                             updateMCPStatus(message.connected);
                             break;
+                        case 'searchResults':
+                            displaySearchResults(message.results, message.query);
+                            break;
+                        case 'editContextData':
+                            showEditModal(message.context);
+                            break;
                     }
                 });
+
+                // Search Functions
+                let currentSearchQuery = '';
+                let currentSearchFilters = {};
+                let currentEditingContextId = null;
+
+                function performSearch() {
+                    const query = document.getElementById('search-query').value;
+                    const typeFilter = document.getElementById('type-filter').value;
+                    const dateFilter = document.getElementById('date-filter').value;
+                    
+                    currentSearchQuery = query;
+                    currentSearchFilters = {
+                        type: typeFilter,
+                        dateRange: dateFilter
+                    };
+                    
+                    vscode.postMessage({
+                        type: 'searchContexts',
+                        query: query,
+                        filters: currentSearchFilters
+                    });
+                }
+
+                function clearSearch() {
+                    document.getElementById('search-query').value = '';
+                    document.getElementById('type-filter').value = 'all';
+                    document.getElementById('date-filter').value = 'all';
+                    
+                    const resultsEl = document.getElementById('search-results');
+                    resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">Enter a search term to find contexts</p>';
+                    document.getElementById('search-count').textContent = '0 results';
+                    
+                    currentSearchQuery = '';
+                    currentSearchFilters = {};
+                }
+
+                function displaySearchResults(results, query) {
+                    const resultsEl = document.getElementById('search-results');
+                    const countEl = document.getElementById('search-count');
+                    
+                    countEl.textContent = \`\${results.length} result\${results.length !== 1 ? 's' : ''}\`;
+                    
+                    if (results.length === 0) {
+                        resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">No contexts found</p>';
+                        return;
+                    }
+
+                    resultsEl.innerHTML = results.map(ctx => \`
+                        <div class="context-item" style="cursor: pointer; margin-bottom: 8px; padding: 12px; 
+                                                          border: 1px solid var(--vscode-panel-border); border-radius: 4px;
+                                                          background: var(--vscode-editorWidget-background);" 
+                             onclick="editContextById('\${ctx.id}')">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                                <div class="context-type" style="font-size: 10px; font-weight: 600; 
+                                                                 background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+                                                                 padding: 2px 6px; border-radius: 3px;">\${ctx.type.toUpperCase()}</div>
+                                <div class="context-timestamp" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                    \${new Date(ctx.timestamp).toLocaleString()}
+                                </div>
+                            </div>
+                            <div class="context-content" style="font-size: 12px; line-height: 1.4; margin-bottom: 6px;">
+                                \${highlightSearchTerm(ctx.content.substring(0, 150), query)}...
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="context-tags" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                    Tags: \${ctx.tags.join(', ') || 'none'}
+                                </div>
+                                <div style="font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                    Importance: \${ctx.importance}/10
+                                </div>
+                            </div>
+                        </div>
+                    \`).join('');
+                }
+
+                function highlightSearchTerm(text, query) {
+                    if (!query || !query.trim()) return text;
+                    // Simple case-insensitive search without regex to avoid escape issues
+                    const lowerText = text.toLowerCase();
+                    const lowerQuery = query.toLowerCase();
+                    const index = lowerText.indexOf(lowerQuery);
+                    
+                    if (index === -1) return text;
+                    
+                    const before = text.substring(0, index);
+                    const match = text.substring(index, index + query.length);
+                    const after = text.substring(index + query.length);
+                    
+                    return before + '<mark style="background: var(--vscode-editor-findMatchHighlightBackground);">' + match + '</mark>' + after;
+                }
+
+                // Edit Context Functions
+                function editContextById(contextId) {
+                    currentEditingContextId = contextId;
+                    vscode.postMessage({
+                        type: 'editContext',
+                        contextId: contextId
+                    });
+                }
+
+                function showEditModal(context) {
+                    if (!context) return;
+                    
+                    document.getElementById('edit-content').value = context.content;
+                    document.getElementById('edit-type').value = context.type;
+                    document.getElementById('edit-importance').value = context.importance;
+                    document.getElementById('importance-value').textContent = context.importance;
+                    document.getElementById('edit-tags').value = context.tags.join(', ');
+                    
+                    document.getElementById('edit-modal').style.display = 'block';
+                }
+
+                function closeEditModal() {
+                    document.getElementById('edit-modal').style.display = 'none';
+                    currentEditingContextId = null;
+                }
+
+                function saveContext() {
+                    if (!currentEditingContextId) return;
+                    
+                    const content = document.getElementById('edit-content').value;
+                    const type = document.getElementById('edit-type').value;
+                    const importance = parseInt(document.getElementById('edit-importance').value);
+                    const tagsText = document.getElementById('edit-tags').value;
+                    const tags = tagsText.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+                    
+                    if (!content.trim()) {
+                        alert('Content cannot be empty');
+                        return;
+                    }
+                    
+                    vscode.postMessage({
+                        type: 'updateContext',
+                        contextId: currentEditingContextId,
+                        updates: {
+                            content,
+                            type,
+                            importance,
+                            tags
+                        },
+                        refreshType: currentSearchQuery ? 'search' : 'general',
+                        lastQuery: currentSearchQuery,
+                        lastFilters: currentSearchFilters
+                    });
+                    
+                    closeEditModal();
+                }
+
+                function deleteContext() {
+                    if (!currentEditingContextId) return;
+                    
+                    if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    vscode.postMessage({
+                        type: 'deleteContext',
+                        contextId: currentEditingContextId
+                    });
+                    
+                    closeEditModal();
+                    
+                    // Refresh current view
+                    if (currentSearchQuery) {
+                        performSearch();
+                    }
+                }
 
                 // Event Listeners Setup
                 function setupEventListeners() {
                     document.getElementById('git-commits').addEventListener('change', toggleGitCapture);
                     document.getElementById('file-changes').addEventListener('change', toggleFileCapture);
+                    
+                    // Search event listeners
+                    document.getElementById('search-query').addEventListener('keyup', function(e) {
+                        if (e.key === 'Enter') {
+                            performSearch();
+                        }
+                    });
+                    
+                    // Importance slider listener
+                    document.getElementById('edit-importance').addEventListener('input', function(e) {
+                        document.getElementById('importance-value').textContent = e.target.value;
+                    });
+                    
+                    // Close modal on outside click
+                    document.getElementById('edit-modal').addEventListener('click', function(e) {
+                        if (e.target === this) {
+                            closeEditModal();
+                        }
+                    });
                 }
 
                 // Initialize

@@ -79,9 +79,14 @@ Crear una **extensión de VS Code** que proporcione captura automática de conte
 - **Fecha**: Completada
 - **Funcionalidades**: MCP server básico, herramientas get_context y get_active_agents, auto-configuración para Claude Code, status UI
 
+### ITERACIÓN 5: Advanced Context + Search ✅
+- **Estado**: 100% Completo
+- **Fecha**: Completada
+- **Funcionalidades**: Sistema de búsqueda avanzado, modal de edición de contextos, filtros por tipo y fecha, validación de formularios
+
 ## 🔄 **Próxima Iteración:**
-- **ITERACIÓN 5**: Advanced Context + Search
-- **Objetivo**: Gestión avanzada de contexto y búsqueda
+- **ITERACIÓN 6**: Keyword Detection
+- **Objetivo**: Detección automática de keywords importantes
 - **Estimación**: 1 semana
 
 ---
@@ -1448,10 +1453,10 @@ case 'testMCPConnection':
 - [ ] Filtros por tipo y fecha
 
 ### ✅ Criterios de Aceptación - Iteración 5
-- [ ] Modal de edición funciona correctamente
-- [ ] Búsqueda devuelve resultados relevantes
-- [ ] Filtros se aplican correctamente
-- [ ] Performance adecuada con 100+ contextos
+- [x] Modal de edición funciona correctamente
+- [x] Búsqueda devuelve resultados relevantes
+- [x] Filtros se aplican correctamente
+- [x] Performance adecuada con 100+ contextos
 
 ---
 
