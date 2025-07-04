@@ -52,6 +52,16 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                         5,
                         ['test', 'manual']
                     );
+                    // Refresh contexts in general tab
+                    const refreshedContexts = await this.database.getContexts();
+                    webviewView.webview.postMessage({
+                        type: 'contextsData',
+                        contexts: refreshedContexts.slice(0, 10)
+                    });
+                    // If user is on search tab, refresh search results too
+                    webviewView.webview.postMessage({
+                        type: 'refreshSearch'
+                    });
                     break;
                 case 'getConfig':
                     const config = this.configStore.getConfig();
@@ -594,7 +604,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     
                     <div id="search-results" style="max-height: 400px; overflow-y: auto;">
                         <p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">
-                            Start typing to search contexts...
+                            Loading all contexts...
                         </p>
                     </div>
                 </div>
@@ -675,8 +685,8 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     if (tabName === 'agents') {
                         loadAgents();
                     } else if (tabName === 'search') {
-                        // Search tab doesn't need initial loading
-                        // User will initiate search manually
+                        // Load all contexts by default on search tab
+                        loadAllContextsForSearch();
                     }
                 }
 
@@ -859,6 +869,13 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                         case 'editContextData':
                             showEditModal(message.context);
                             break;
+                        case 'refreshSearch':
+                            // If we're on the search tab, refresh the current search
+                            const activeTab = document.querySelector('.tab-button.active');
+                            if (activeTab && activeTab.textContent.includes('Search')) {
+                                loadAllContextsForSearch();
+                            }
+                            break;
                     }
                 });
 
@@ -899,21 +916,31 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     }, 300); // 300ms delay
                 }
 
+                function loadAllContextsForSearch() {
+                    // Load all contexts without any query (empty search shows all)
+                    vscode.postMessage({
+                        type: 'searchContexts',
+                        query: '',
+                        filters: {
+                            type: 'all',
+                            dateRange: 'all'
+                        }
+                    });
+                }
+
                 function clearSearch() {
                     document.getElementById('search-query').value = '';
                     document.getElementById('type-filter').value = 'all';
                     document.getElementById('date-filter').value = 'all';
                     
-                    const resultsEl = document.getElementById('search-results');
-                    resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">Start typing to search contexts...</p>';
-                    document.getElementById('search-count').textContent = '0 results';
-                    
-                    // Hide selection controls
-                    document.getElementById('selection-controls').style.display = 'none';
+                    // Clear selection
                     selectedContextIds.clear();
                     
                     currentSearchQuery = '';
                     currentSearchFilters = {};
+                    
+                    // Reload all contexts
+                    loadAllContextsForSearch();
                 }
 
                 function displaySearchResults(results, query) {
@@ -960,8 +987,9 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                                         </div>
                                         <div style="display: flex; gap: 12px; font-size: 10px; color: var(--vscode-descriptionForeground);">
                                             <span>⭐ \${ctx.importance}/10</span>
-                                            <span style="cursor: pointer; color: var(--vscode-errorForeground);" 
-                                                  onclick="event.stopPropagation(); deleteContextById('\${ctx.id}')">🗑️</span>
+                                            <button style="cursor: pointer; color: var(--vscode-errorForeground); background: none; border: none; font-size: 12px;" 
+                                                    onclick="event.stopPropagation(); deleteContextById('\${ctx.id}')" 
+                                                    title="Delete this context">🗑️</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1104,10 +1132,12 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 }
 
                 function deleteContextById(contextId) {
+                    console.log('Attempting to delete context:', contextId);
                     if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
                         return;
                     }
                     
+                    console.log('Sending delete message for context:', contextId);
                     vscode.postMessage({
                         type: 'deleteContext',
                         contextId: contextId,
