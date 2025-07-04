@@ -1,0 +1,11 @@
+src/**
+.vscode-test/**
+.vscode/**
+.gitignore
+webpack.config.js
+tsconfig.json
+node_modules/**
+test-storage/**
+TESTING.md
+master-project-guide.md
+*.vsix

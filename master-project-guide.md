@@ -69,9 +69,19 @@ Crear una **extensión de VS Code** que proporcione captura automática de conte
 - **Fecha**: Completada
 - **Funcionalidades**: Monitoreo de git commits, file watcher, auto-capture, configuración UI
 
+### ITERACIÓN 3: Agent Selection UI ✅
+- **Estado**: 100% Completo
+- **Fecha**: Completada  
+- **Funcionalidades**: Sistema de pestañas, selección de agentes, 3 agentes especializados, configuración persistente
+
+### ITERACIÓN 4: MCP Integration Basic ✅
+- **Estado**: 100% Completo
+- **Fecha**: Completada
+- **Funcionalidades**: MCP server básico, herramientas get_context y get_active_agents, auto-configuración para Claude Code, status UI
+
 ## 🔄 **Próxima Iteración:**
-- **ITERACIÓN 3**: Agent Selection UI
-- **Objetivo**: Interface para seleccionar agentes especializados
+- **ITERACIÓN 5**: Advanced Context + Search
+- **Objetivo**: Gestión avanzada de contexto y búsqueda
 - **Estimación**: 1 semana
 
 ---
@@ -1100,11 +1110,11 @@ private getGeneralTabContent(): string {
 ```
 
 ### ✅ Criterios de Aceptación - Iteración 3
-- [ ] Pestaña "Agents" aparece y funciona
-- [ ] Checkboxes de agentes se pueden activar/desactivar
-- [ ] Contador de "Active Agents" se actualiza
-- [ ] Estado visual de agentes cambia correctamente
-- [ ] Cambios se comunican correctamente con el backend
+- [x] Pestaña "Agents" aparece y funciona
+- [x] Checkboxes de agentes se pueden activar/desactivar
+- [x] Contador de "Active Agents" se actualiza
+- [x] Estado visual de agentes cambia correctamente
+- [x] Cambios se comunican correctamente con el backend
 
 ---
 

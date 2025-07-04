@@ -2,11 +2,18 @@
   "name": "claude-context-manager",
   "displayName": "Claude Context Manager",
   "description": "Smart context management for Claude AI tools",
-  "version": "0.0.1",
+  "version": "0.2.0",
+  "publisher": "claude-dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/claude-dev/claude-context-manager.git"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -28,15 +35,27 @@
       {
         "command": "claude-context.simulateFileChange",
         "title": "Claude Context: Simulate File Change"
+      },
+      {
+        "command": "claude-context.generateMCPConfig",
+        "title": "Claude Context: Generate MCP Config"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claude-context",
+          "title": "Claude Context Manager",
+          "icon": "$(robot)"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "claude-context": [
         {
           "id": "claude-context.panel",
-          "name": "Claude Context",
-          "type": "webview",
-          "when": "workspaceFolderCount > 0"
+          "name": "Context Manager",
+          "type": "webview"
         }
       ]
     }
@@ -50,9 +69,13 @@
   "devDependencies": {
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
+    "ts-loader": "^9.4.2",
     "typescript": "^4.9.4",
     "webpack": "^5.75.0",
-    "webpack-cli": "^5.0.1",
-    "ts-loader": "^9.4.2"
+    "webpack-cli": "^5.0.1"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "zod": "^3.25.73"
   }
 }
