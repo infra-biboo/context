@@ -131,6 +131,41 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 case 'deleteContext':
                     await this.database.deleteContext(data.contextId);
                     vscode.window.showInformationMessage('Context deleted');
+                    // Refresh the current view
+                    if (data.refreshType === 'search' && data.lastQuery) {
+                        const refreshResults = await this.searchContexts(data.lastQuery, data.lastFilters);
+                        webviewView.webview.postMessage({
+                            type: 'searchResults',
+                            results: refreshResults,
+                            query: data.lastQuery
+                        });
+                    } else {
+                        const refreshContexts = await this.database.getContexts();
+                        webviewView.webview.postMessage({
+                            type: 'contextsData',
+                            contexts: refreshContexts.slice(0, 10)
+                        });
+                    }
+                    break;
+                case 'deleteMultipleContexts':
+                    const deletePromises = data.contextIds.map((id: string) => this.database.deleteContext(id));
+                    await Promise.all(deletePromises);
+                    vscode.window.showInformationMessage(`${data.contextIds.length} contexts deleted`);
+                    // Refresh current view
+                    if (data.refreshType === 'search' && data.lastQuery) {
+                        const refreshResults = await this.searchContexts(data.lastQuery, data.lastFilters);
+                        webviewView.webview.postMessage({
+                            type: 'searchResults',
+                            results: refreshResults,
+                            query: data.lastQuery
+                        });
+                    } else {
+                        const refreshContexts = await this.database.getContexts();
+                        webviewView.webview.postMessage({
+                            type: 'contextsData',
+                            contexts: refreshContexts.slice(0, 10)
+                        });
+                    }
                     break;
             }
         });
@@ -531,11 +566,8 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                             <option value="month">This Month</option>
                         </select>
                         
-                        <button class="btn btn-secondary" onclick="performSearch()" style="font-size: 11px; padding: 4px 8px;">
-                            🔍 Search
-                        </button>
                         <button class="btn btn-secondary" onclick="clearSearch()" style="font-size: 11px; padding: 4px 8px;">
-                            🗑️ Clear
+                            🧹 Clear Filters
                         </button>
                     </div>
                 </div>
@@ -544,12 +576,25 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 <div class="status-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <h3 style="margin: 0;">📋 Results</h3>
-                        <span id="search-count" style="font-size: 11px; color: var(--vscode-descriptionForeground);">0 results</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span id="search-count" style="font-size: 11px; color: var(--vscode-descriptionForeground);">0 results</span>
+                            <div id="selection-controls" style="display: none; gap: 4px;">
+                                <button class="btn btn-secondary" onclick="selectAllContexts()" style="font-size: 10px; padding: 2px 6px;">
+                                    ☑️ All
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearSelection()" style="font-size: 10px; padding: 2px 6px;">
+                                    ◻️ None
+                                </button>
+                                <button class="btn" onclick="deleteSelectedContexts()" style="font-size: 10px; padding: 2px 6px; background: var(--vscode-errorForeground);">
+                                    🗑️ Delete <span id="selected-count">0</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     
                     <div id="search-results" style="max-height: 400px; overflow-y: auto;">
                         <p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">
-                            Enter a search term to find contexts
+                            Start typing to search contexts...
                         </p>
                     </div>
                 </div>
@@ -821,6 +866,8 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 let currentSearchQuery = '';
                 let currentSearchFilters = {};
                 let currentEditingContextId = null;
+                let selectedContextIds = new Set();
+                let searchTimeout = null;
 
                 function performSearch() {
                     const query = document.getElementById('search-query').value;
@@ -840,14 +887,30 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     });
                 }
 
+                function performSearchWithDelay() {
+                    // Clear previous timeout
+                    if (searchTimeout) {
+                        clearTimeout(searchTimeout);
+                    }
+                    
+                    // Set new timeout for real-time search
+                    searchTimeout = setTimeout(() => {
+                        performSearch();
+                    }, 300); // 300ms delay
+                }
+
                 function clearSearch() {
                     document.getElementById('search-query').value = '';
                     document.getElementById('type-filter').value = 'all';
                     document.getElementById('date-filter').value = 'all';
                     
                     const resultsEl = document.getElementById('search-results');
-                    resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">Enter a search term to find contexts</p>';
+                    resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">Start typing to search contexts...</p>';
                     document.getElementById('search-count').textContent = '0 results';
+                    
+                    // Hide selection controls
+                    document.getElementById('selection-controls').style.display = 'none';
+                    selectedContextIds.clear();
                     
                     currentSearchQuery = '';
                     currentSearchFilters = {};
@@ -856,40 +919,57 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 function displaySearchResults(results, query) {
                     const resultsEl = document.getElementById('search-results');
                     const countEl = document.getElementById('search-count');
+                    const selectionControls = document.getElementById('selection-controls');
                     
                     countEl.textContent = \`\${results.length} result\${results.length !== 1 ? 's' : ''}\`;
                     
                     if (results.length === 0) {
                         resultsEl.innerHTML = '<p style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">No contexts found</p>';
+                        selectionControls.style.display = 'none';
                         return;
                     }
 
+                    // Show selection controls when there are results
+                    selectionControls.style.display = 'flex';
+                    
                     resultsEl.innerHTML = results.map(ctx => \`
-                        <div class="context-item" style="cursor: pointer; margin-bottom: 8px; padding: 12px; 
+                        <div class="context-item" style="margin-bottom: 8px; padding: 12px; 
                                                           border: 1px solid var(--vscode-panel-border); border-radius: 4px;
-                                                          background: var(--vscode-editorWidget-background);" 
-                             onclick="editContextById('\${ctx.id}')">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                <div class="context-type" style="font-size: 10px; font-weight: 600; 
-                                                                 background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-                                                                 padding: 2px 6px; border-radius: 3px;">\${ctx.type.toUpperCase()}</div>
-                                <div class="context-timestamp" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
-                                    \${new Date(ctx.timestamp).toLocaleString()}
-                                </div>
-                            </div>
-                            <div class="context-content" style="font-size: 12px; line-height: 1.4; margin-bottom: 6px;">
-                                \${highlightSearchTerm(ctx.content.substring(0, 150), query)}...
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div class="context-tags" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
-                                    Tags: \${ctx.tags.join(', ') || 'none'}
-                                </div>
-                                <div style="font-size: 10px; color: var(--vscode-descriptionForeground);">
-                                    Importance: \${ctx.importance}/10
+                                                          background: var(--vscode-editorWidget-background);
+                                                          position: relative;" 
+                             data-context-id="\${ctx.id}">
+                            <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                <input type="checkbox" class="context-checkbox" value="\${ctx.id}" 
+                                       onchange="toggleContextSelection('\${ctx.id}')"
+                                       style="margin-top: 4px; cursor: pointer;">
+                                <div style="flex: 1; cursor: pointer;" onclick="editContextById('\${ctx.id}')">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                                        <div class="context-type" style="font-size: 10px; font-weight: 600; 
+                                                                         background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+                                                                         padding: 2px 6px; border-radius: 3px;">\${ctx.type.toUpperCase()}</div>
+                                        <div class="context-timestamp" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                            \${new Date(ctx.timestamp).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div class="context-content" style="font-size: 12px; line-height: 1.4; margin-bottom: 8px;">
+                                        \${highlightSearchTerm(ctx.content.substring(0, 300), query)}...
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div class="context-tags" style="font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                            📎 \${ctx.tags.join(', ') || 'no tags'}
+                                        </div>
+                                        <div style="display: flex; gap: 12px; font-size: 10px; color: var(--vscode-descriptionForeground);">
+                                            <span>⭐ \${ctx.importance}/10</span>
+                                            <span style="cursor: pointer; color: var(--vscode-errorForeground);" 
+                                                  onclick="event.stopPropagation(); deleteContextById('\${ctx.id}')">🗑️</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     \`).join('');
+                    
+                    updateSelectionCount();
                 }
 
                 function highlightSearchTerm(text, query) {
@@ -965,6 +1045,78 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     closeEditModal();
                 }
 
+                // Selection Functions
+                function toggleContextSelection(contextId) {
+                    if (selectedContextIds.has(contextId)) {
+                        selectedContextIds.delete(contextId);
+                    } else {
+                        selectedContextIds.add(contextId);
+                    }
+                    updateSelectionCount();
+                }
+
+                function selectAllContexts() {
+                    const checkboxes = document.querySelectorAll('.context-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = true;
+                        selectedContextIds.add(checkbox.value);
+                    });
+                    updateSelectionCount();
+                }
+
+                function clearSelection() {
+                    const checkboxes = document.querySelectorAll('.context-checkbox');
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                    selectedContextIds.clear();
+                    updateSelectionCount();
+                }
+
+                function updateSelectionCount() {
+                    const selectedCount = selectedContextIds.size;
+                    document.getElementById('selected-count').textContent = selectedCount;
+                    
+                    const deleteBtn = document.querySelector('#selection-controls button[onclick="deleteSelectedContexts()"]');
+                    if (deleteBtn) {
+                        deleteBtn.style.display = selectedCount > 0 ? 'inline-block' : 'none';
+                    }
+                }
+
+                function deleteSelectedContexts() {
+                    if (selectedContextIds.size === 0) return;
+                    
+                    const count = selectedContextIds.size;
+                    if (!confirm(\`Are you sure you want to delete \${count} selected context\${count > 1 ? 's' : ''}? This action cannot be undone.\`)) {
+                        return;
+                    }
+                    
+                    vscode.postMessage({
+                        type: 'deleteMultipleContexts',
+                        contextIds: Array.from(selectedContextIds),
+                        refreshType: currentSearchQuery ? 'search' : 'general',
+                        lastQuery: currentSearchQuery,
+                        lastFilters: currentSearchFilters
+                    });
+                    
+                    selectedContextIds.clear();
+                    updateSelectionCount();
+                }
+
+                function deleteContextById(contextId) {
+                    if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    vscode.postMessage({
+                        type: 'deleteContext',
+                        contextId: contextId,
+                        refreshType: currentSearchQuery ? 'search' : 'general',
+                        lastQuery: currentSearchQuery,
+                        lastFilters: currentSearchFilters
+                    });
+                }
+
                 function deleteContext() {
                     if (!currentEditingContextId) return;
                     
@@ -974,15 +1126,13 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     
                     vscode.postMessage({
                         type: 'deleteContext',
-                        contextId: currentEditingContextId
+                        contextId: currentEditingContextId,
+                        refreshType: currentSearchQuery ? 'search' : 'general',
+                        lastQuery: currentSearchQuery,
+                        lastFilters: currentSearchFilters
                     });
                     
                     closeEditModal();
-                    
-                    // Refresh current view
-                    if (currentSearchQuery) {
-                        performSearch();
-                    }
                 }
 
                 // Event Listeners Setup
@@ -990,11 +1140,24 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     document.getElementById('git-commits').addEventListener('change', toggleGitCapture);
                     document.getElementById('file-changes').addEventListener('change', toggleFileCapture);
                     
-                    // Search event listeners
+                    // Search event listeners - real-time search
+                    document.getElementById('search-query').addEventListener('input', function(e) {
+                        performSearchWithDelay();
+                    });
+                    
                     document.getElementById('search-query').addEventListener('keyup', function(e) {
                         if (e.key === 'Enter') {
                             performSearch();
                         }
+                    });
+                    
+                    // Filter change listeners
+                    document.getElementById('type-filter').addEventListener('change', function(e) {
+                        performSearchWithDelay();
+                    });
+                    
+                    document.getElementById('date-filter').addEventListener('change', function(e) {
+                        performSearchWithDelay();
                     });
                     
                     // Importance slider listener
