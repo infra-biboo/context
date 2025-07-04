@@ -37,6 +37,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
+            console.log('📨 Received message from webview:', data.type, data);
             switch (data.type) {
                 case 'getContexts':
                     const contexts = await this.database.getContexts();
@@ -139,22 +140,29 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     vscode.window.showInformationMessage('Context updated successfully');
                     break;
                 case 'deleteContext':
-                    await this.database.deleteContext(data.contextId);
-                    vscode.window.showInformationMessage('Context deleted');
-                    // Refresh the current view
-                    if (data.refreshType === 'search' && data.lastQuery) {
-                        const refreshResults = await this.searchContexts(data.lastQuery, data.lastFilters);
-                        webviewView.webview.postMessage({
-                            type: 'searchResults',
-                            results: refreshResults,
-                            query: data.lastQuery
-                        });
-                    } else {
-                        const refreshContexts = await this.database.getContexts();
-                        webviewView.webview.postMessage({
-                            type: 'contextsData',
-                            contexts: refreshContexts.slice(0, 10)
-                        });
+                    console.log('🗑️ Deleting context:', data.contextId);
+                    try {
+                        await this.database.deleteContext(data.contextId);
+                        console.log('✅ Context deleted successfully');
+                        vscode.window.showInformationMessage('Context deleted');
+                        // Refresh the current view
+                        if (data.refreshType === 'search' && data.lastQuery) {
+                            const refreshResults = await this.searchContexts(data.lastQuery, data.lastFilters);
+                            webviewView.webview.postMessage({
+                                type: 'searchResults',
+                                results: refreshResults,
+                                query: data.lastQuery
+                            });
+                        } else {
+                            const refreshContexts = await this.database.getContexts();
+                            webviewView.webview.postMessage({
+                                type: 'contextsData',
+                                contexts: refreshContexts.slice(0, 10)
+                            });
+                        }
+                    } catch (error) {
+                        console.error('❌ Error deleting context:', error);
+                        vscode.window.showErrorMessage(`Failed to delete context: ${error}`);
                     }
                     break;
                 case 'deleteMultipleContexts':
@@ -917,15 +925,18 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 }
 
                 function loadAllContextsForSearch() {
+                    console.log('📋 Loading all contexts for search tab');
                     // Load all contexts without any query (empty search shows all)
-                    vscode.postMessage({
+                    const message = {
                         type: 'searchContexts',
                         query: '',
                         filters: {
                             type: 'all',
                             dateRange: 'all'
                         }
-                    });
+                    };
+                    console.log('📤 Sending search message:', message);
+                    vscode.postMessage(message);
                 }
 
                 function clearSearch() {
@@ -1132,19 +1143,25 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 }
 
                 function deleteContextById(contextId) {
-                    console.log('Attempting to delete context:', contextId);
+                    console.log('🗑️ deleteContextById called with:', contextId);
+                    console.log('Current search query:', currentSearchQuery);
+                    console.log('Current filters:', currentSearchFilters);
+                    
                     if (!confirm('Are you sure you want to delete this context? This action cannot be undone.')) {
+                        console.log('Delete cancelled by user');
                         return;
                     }
                     
-                    console.log('Sending delete message for context:', contextId);
-                    vscode.postMessage({
+                    const message = {
                         type: 'deleteContext',
                         contextId: contextId,
                         refreshType: currentSearchQuery ? 'search' : 'general',
                         lastQuery: currentSearchQuery,
                         lastFilters: currentSearchFilters
-                    });
+                    };
+                    
+                    console.log('📤 Sending delete message:', message);
+                    vscode.postMessage(message);
                 }
 
                 function deleteContext() {
