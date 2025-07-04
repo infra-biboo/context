@@ -50,6 +50,32 @@ Crear una **extensión de VS Code** que proporcione captura automática de conte
 
 ---
 
+# 📊 ESTADO ACTUAL DEL PROYECTO
+
+## ✅ **Iteraciones Completadas:**
+
+### ITERACIÓN 0: Setup y Foundation ✅
+- **Estado**: 100% Completo
+- **Fecha**: Completada
+- **Funcionalidades**: Extensión básica, build pipeline, comandos de prueba
+
+### ITERACIÓN 1: Core Storage + Basic UI ✅  
+- **Estado**: 100% Completo
+- **Fecha**: Completada
+- **Funcionalidades**: Base de datos JSON, panel lateral, gestión de contextos
+
+### ITERACIÓN 2: Git Integration + File Watcher ✅
+- **Estado**: 100% Completo  
+- **Fecha**: Completada
+- **Funcionalidades**: Monitoreo de git commits, file watcher, auto-capture, configuración UI
+
+## 🔄 **Próxima Iteración:**
+- **ITERACIÓN 3**: Agent Selection UI
+- **Objetivo**: Interface para seleccionar agentes especializados
+- **Estimación**: 1 semana
+
+---
+
 # 🚀 PLAN DE DESARROLLO INCREMENTAL
 
 ## ITERACIÓN 0: Setup y Foundation (Semana 1)
@@ -148,11 +174,11 @@ export function deactivate() {
 ```
 
 ### ✅ Criterios de Aceptación - Iteración 0
-- [ ] `npm install` ejecuta sin errores
-- [ ] `npm run compile` genera dist/extension.js
-- [ ] Extensión se instala en VS Code de desarrollo
-- [ ] Command "Test Claude Context" aparece y ejecuta
-- [ ] No hay errores en Output Console
+- [x] `npm install` ejecuta sin errores
+- [x] `npm run compile` genera dist/extension.js
+- [x] Extensión se instala en VS Code de desarrollo
+- [x] Command "Test Claude Context" aparece y ejecuta
+- [x] No hay errores en Output Console
 
 ---
 
@@ -173,11 +199,11 @@ export function deactivate() {
 - [ ] Cierra correctamente sin errores
 
 ### 📦 Entregables
-- [ ] SQLite database funcionando
-- [ ] Webview panel básico
-- [ ] Context manager core
-- [ ] Tree view provider
-- [ ] Almacenamiento de configuración básica
+- [x] SQLite database funcionando (JSON storage)
+- [x] Webview panel básico
+- [x] Context manager core
+- [x] Tree view provider (Webview)
+- [x] Almacenamiento de configuración básica
 
 ### 🔧 Implementación Técnica
 
@@ -472,12 +498,12 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
 ```
 
 ### ✅ Criterios de Aceptación - Iteración 1
-- [ ] Panel lateral aparece en Explorer
-- [ ] Muestra "General Status" con información básica
-- [ ] Botón "Add Test Context" funciona
-- [ ] Botón "Refresh" actualiza la lista
-- [ ] Contextos se persisten entre reinicios de VS Code
-- [ ] No hay errores en console
+- [x] Panel lateral aparece en Explorer
+- [x] Muestra "General Status" con información básica
+- [x] Botón "Add Test Context" funciona
+- [x] Botón "Refresh" actualiza la lista
+- [x] Contextos se persisten entre reinicios de VS Code
+- [x] No hay errores en console
 
 ---
 
@@ -498,10 +524,10 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
 - [ ] Toggle para activar/desactivar en panel
 
 ### 📦 Entregables
-- [ ] Git integration básica
-- [ ] File watcher para cambios importantes
-- [ ] Auto-capture de commits
-- [ ] Configuración on/off en UI
+- [x] Git integration básica
+- [x] File watcher para cambios importantes
+- [x] Auto-capture de commits
+- [x] Configuración on/off en UI
 
 ### 🔧 Implementación Técnica
 
@@ -722,11 +748,11 @@ case 'updateConfig':
 ```
 
 ### ✅ Criterios de Aceptación - Iteración 2
-- [ ] Git commits se capturan automáticamente
-- [ ] Toggle "Capture Git Commits" funciona
-- [ ] Commits aparecen en la lista de contextos
-- [ ] Configuración persiste entre sesiones
-- [ ] Notificación aparece cuando se captura commit
+- [x] Git commits se capturan automáticamente
+- [x] Toggle "Capture Git Commits" funciona
+- [x] Commits aparecen en la lista de contextos
+- [x] Configuración persiste entre sesiones
+- [x] Notificación aparece cuando se captura commit
 
 ---
 
