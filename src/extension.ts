@@ -3,7 +3,7 @@ import { registerCommands } from './commands/test-command';
 import { registerPanelCommands } from './commands/panel-commands';
 import { registerGitTestCommands } from './commands/git-test-commands';
 import { registerMCPCommands } from './commands/mcp-commands';
-import { ContextWebviewProvider } from './ui/webview-provider';
+import { ModularWebviewProvider } from './ui/webview-provider';
 import { ContextManager } from './core/context-manager';
 import { ConfigStore } from './core/config-store';
 import { AutoCapture } from './capture/auto-capture';
@@ -35,7 +35,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const mcpConfigGenerator = new MCPConfigGenerator(context.extensionPath);
     
     // Register webview provider
-    const webviewProvider = new ContextWebviewProvider(
+    const webviewProvider = new ModularWebviewProvider(
         context.extensionUri,
         contextManager.getDatabase(),
         configStore,
@@ -47,7 +47,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
-            ContextWebviewProvider.viewType,
+            ModularWebviewProvider.viewType,
             webviewProvider
         )
     );

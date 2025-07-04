@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { Logger } from '../utils/logger';
 
 export interface ContextEntry {
     id: string;
@@ -96,6 +97,7 @@ export class ContextDatabase {
         
         this.contexts.delete(id);
         await this.save();
+        Logger.info(`Context deleted: ${id}`);
     }
 
     async searchContexts(query: string, options: {

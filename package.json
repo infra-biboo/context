@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "lucide": "^0.525.0",
     "zod": "^3.25.73"
   }
 }
