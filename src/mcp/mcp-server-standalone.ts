@@ -32,21 +32,21 @@ class MCPServerStandalone {
     private mcpServer!: MCPServer;
 
     constructor() {
-        console.log('🚀 MCP Server Standalone starting...');
+        console.log('MCP Server Standalone starting...');
     }
 
     async initialize(): Promise<void> {
         try {
             // Create database configuration from environment
             const dbConfig = this.getDbConfigFromEnv();
-            console.log(`📦 Using database type: ${dbConfig.type}`);
+            console.log(`Using database type: ${dbConfig.type}`);
 
             // Initialize database with adapter architecture
             // We create a mock extension context for standalone mode
             const mockContext = this.createMockExtensionContext();
             this.database = new ContextDatabase(mockContext, dbConfig);
             await this.database.initialize();
-            console.log('✅ Database initialized');
+            console.log('Database initialized');
 
             // Initialize config store
             const configStore = ConfigStore.getInstance(mockContext);
@@ -54,15 +54,15 @@ class MCPServerStandalone {
             // Initialize agent manager
             this.agentManager = new AgentManager(this.database, configStore);
             await this.agentManager.initialize();
-            console.log('✅ Agent manager initialized');
+            console.log('Agent manager initialized');
 
             // Populate standard agents if needed
             try {
                 await this.database.populateStandardAgents();
-                console.log('✅ Standard agents populated');
+                console.log('Standard agents populated');
             } catch (error) {
                 // Agents might already exist
-                console.log('ℹ️  Standard agents already exist');
+                console.log('Standard agents already exist');
             }
 
             // Initialize MCP server
@@ -78,11 +78,11 @@ class MCPServerStandalone {
 
             // Start the server
             await this.mcpServer.start();
-            console.log('✅ MCP Server started successfully');
-            console.log('📡 Server is ready to receive requests via STDIO');
+            console.log('MCP Server started successfully');
+            console.log('Server is ready to receive requests via STDIO');
 
         } catch (error) {
-            console.error('❌ Failed to initialize MCP Server:', error);
+            console.error('Failed to initialize MCP Server:', error);
             process.exit(1);
         }
     }
@@ -161,7 +161,7 @@ class MCPServerStandalone {
     }
 
     async shutdown(): Promise<void> {
-        console.log('🛑 Shutting down MCP Server...');
+        console.log('Shutting down MCP Server...');
         
         if (this.mcpServer) {
             await this.mcpServer.stop();
@@ -171,7 +171,7 @@ class MCPServerStandalone {
             await this.database.close();
         }
         
-        console.log('👋 MCP Server stopped');
+        console.log('MCP Server stopped');
     }
 }
 
@@ -192,12 +192,12 @@ async function main() {
 
     // Handle uncaught errors
     process.on('uncaughtException', (error) => {
-        console.error('❌ Uncaught exception:', error);
+        console.error('Uncaught exception:', error);
         process.exit(1);
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-        console.error('❌ Unhandled rejection at:', promise, 'reason:', reason);
+        console.error('Unhandled rejection at:', promise, 'reason:', reason);
         process.exit(1);
     });
 
@@ -207,6 +207,6 @@ async function main() {
 
 // Run the server
 main().catch((error) => {
-    console.error('❌ Fatal error:', error);
+    console.error('Fatal error:', error);
     process.exit(1);
 });

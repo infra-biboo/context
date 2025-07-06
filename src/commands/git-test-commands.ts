@@ -36,7 +36,7 @@ export function registerGitTestCommands(context: vscode.ExtensionContext) {
             fs.writeFileSync(commitMsgPath, commitMessage);
             
             Logger.info(`Simulated git commit: ${commitMessage}`);
-            vscode.window.showInformationMessage(`🔄 Simulated commit: ${commitMessage}`);
+            vscode.window.showInformationMessage(`Simulated commit: ${commitMessage}`);
             
             // Trigger the git watcher by touching the file again
             setTimeout(() => {
@@ -69,7 +69,7 @@ export class TestClass {
         try {
             fs.writeFileSync(testFilePath, testContent);
             Logger.info('Created test file for monitoring');
-            vscode.window.showInformationMessage('📁 Created test file for monitoring');
+            vscode.window.showInformationMessage('Created test file for monitoring');
             
             // Schedule deletion after a few seconds
             setTimeout(() => {

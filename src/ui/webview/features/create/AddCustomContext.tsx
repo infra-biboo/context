@@ -5,11 +5,12 @@ import { useTranslation } from '../../i18n';
 import type { ContextEntry } from '../../../../core/database/types';
 import Button from '../../components/Button';
 import ContentCard from '../../components/ContentCard';
+import { Users, Bug, Code, Building, MessageSquare, Scale, Settings, FileText, Book, Plus } from 'lucide-solid';
 
 interface ContextTemplate {
   id: string;
   name: string;
-  icon: string;
+  icon: any;
   type: ContextEntry['type'];
   content: string;
   tags: string[];
@@ -20,7 +21,7 @@ const getContextTemplates = (t: any): ContextTemplate[] => [
   {
     id: 'meeting-notes',
     name: t('addContext.templates.types.meetingNotes'),
-    icon: '👥',
+    icon: <Users size={16} />,
     type: 'conversation',
     content: '# Meeting Notes\n\n**Date:** ${date}\n**Attendees:** \n**Topics Discussed:** \n\n## Key Decisions\n\n## Action Items\n\n## Follow-up',
     tags: ['meeting', 'notes'],
@@ -29,7 +30,7 @@ const getContextTemplates = (t: any): ContextTemplate[] => [
   {
     id: 'bug-report',
     name: t('addContext.templates.types.bugReport'),
-    icon: '🐛',
+    icon: <Bug size={16} />,
     type: 'issue',
     content: '# Bug Report\n\n**Issue:** \n**Steps to Reproduce:** \n1. \n2. \n3. \n\n**Expected Behavior:** \n**Actual Behavior:** \n**Environment:** \n**Priority:** ',
     tags: ['bug', 'issue'],
@@ -38,7 +39,7 @@ const getContextTemplates = (t: any): ContextTemplate[] => [
   {
     id: 'code-snippet',
     name: t('addContext.templates.types.codeSnippet'),
-    icon: '💻',
+    icon: <Code size={16} />,
     type: 'code',
     content: '# Code Snippet\n\n**Purpose:** \n**Language:** \n\n```\n// Add your code here\n```\n\n**Notes:** ',
     tags: ['code', 'snippet'],
@@ -47,7 +48,7 @@ const getContextTemplates = (t: any): ContextTemplate[] => [
   {
     id: 'architecture-decision',
     name: t('addContext.templates.types.architectureDecision'),
-    icon: '🏗️',
+    icon: <Building size={16} />,
     type: 'decision',
     content: '# Architecture Decision Record\n\n**Decision:** \n**Context:** \n**Alternatives Considered:** \n**Consequences:** \n**Status:** Draft/Approved/Deprecated',
     tags: ['architecture', 'decision'],
@@ -56,13 +57,13 @@ const getContextTemplates = (t: any): ContextTemplate[] => [
 ];
 
 const getTypeOptions = (t: any) => [
-  { value: 'conversation', label: t('addContext.types.conversation'), icon: '💬' },
-  { value: 'decision', label: t('addContext.types.decision'), icon: '⚖️' },
-  { value: 'code', label: t('addContext.types.code'), icon: '💻' },
-  { value: 'issue', label: t('addContext.types.issue'), icon: '🐛' },
-  { value: 'custom', label: t('addContext.types.custom'), icon: '⚙️' },
-  { value: 'note', label: t('addContext.types.note'), icon: '📝' },
-  { value: 'reference', label: t('addContext.types.reference'), icon: '📖' }
+  { value: 'conversation', label: t('addContext.types.conversation'), icon: <MessageSquare size={16} /> },
+  { value: 'decision', label: t('addContext.types.decision'), icon: <Scale size={16} /> },
+  { value: 'code', label: t('addContext.types.code'), icon: <Code size={16} /> },
+  { value: 'issue', label: t('addContext.types.issue'), icon: <Bug size={16} /> },
+  { value: 'custom', label: t('addContext.types.custom'), icon: <Settings size={16} /> },
+  { value: 'note', label: t('addContext.types.note'), icon: <FileText size={16} /> },
+  { value: 'reference', label: t('addContext.types.reference'), icon: <Book size={16} /> }
 ] as const;
 
 const AddCustomContext: Component = () => {
@@ -307,7 +308,7 @@ const AddCustomContext: Component = () => {
   };
 
   return (
-    <ContentCard icon="➕" title={t('addContext.title')}>
+    <ContentCard icon={<Plus size={20} />} title={t('addContext.title')}>
       <div class="add-context-form">
         {/* Success Message */}
         <Show when={showSuccess()}>

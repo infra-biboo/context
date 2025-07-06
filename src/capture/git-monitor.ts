@@ -3,16 +3,25 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { ContextDatabase } from '../core/database';
 import { Logger } from '../utils/logger';
+import { MCPClient } from '../mcp/mcp-client';
+import { ConfigStore } from '../core/config-store';
 
 export class GitMonitor {
     private gitWatcher: vscode.FileSystemWatcher | undefined;
     private enabled: boolean = true;
     private lastCommitTime: number = 0;
+    private mcpClient: MCPClient | undefined;
 
     constructor(
         private database: ContextDatabase,
-        private workspaceRoot: string
-    ) {}
+        private workspaceRoot: string,
+        private extensionPath?: string,
+        private extensionContext?: any
+    ) {
+        if (extensionPath && extensionContext) {
+            this.mcpClient = new MCPClient(extensionPath, extensionContext);
+        }
+    }
 
     async start(): Promise<void> {
         const gitPath = path.join(this.workspaceRoot, '.git');
@@ -100,18 +109,49 @@ export class GitMonitor {
                 if (meaningfulMessage) {
                     this.lastCommitTime = Date.now();
                     
+                    const importance = this.calculateCommitImportance(meaningfulMessage);
+                    const tags = this.extractCommitTags(meaningfulMessage);
+                    let content = `Git commit: ${meaningfulMessage}`;
+
+                    // Check if we should enrich this commit
+                    if (this.mcpClient && MCPClient.shouldEnrichContext(importance, meaningfulMessage)) {
+                        try {
+                            Logger.info(`Enriching commit context with Claude: ${meaningfulMessage}`);
+                            const enrichedContent = await this.mcpClient.enrichCommitContext(meaningfulMessage, importance);
+                            
+                            if (enrichedContent) {
+                                content = enrichedContent;
+                                tags.push('ai-enriched');
+                                
+                                // Show special notification for enriched commits
+                                const language = this.mcpClient && this.extensionContext ? 
+                                    ConfigStore.getInstance(this.extensionContext).getConfig().ui.language : 'en';
+                                const notification = language === 'es' ? 
+                                    `🤖 Commit enriquecido por Claude: ${meaningfulMessage.substring(0, 40)}...` :
+                                    `🤖 Commit enriched by Claude: ${meaningfulMessage.substring(0, 40)}...`;
+                                
+                                vscode.window.showInformationMessage(notification, { modal: false });
+                            }
+                        } catch (error) {
+                            Logger.error('Failed to enrich commit context:', error as Error);
+                            // Fall back to regular capture
+                        }
+                    }
+                    
                     await this.database.addContext({
                         projectPath: this.workspaceRoot,
                         type: 'decision',
-                        content: `Git commit: ${meaningfulMessage}`,
-                        importance: this.calculateCommitImportance(meaningfulMessage),
-                        tags: this.extractCommitTags(meaningfulMessage)
+                        content,
+                        importance,
+                        tags
                     });
 
-                    vscode.window.showInformationMessage(
-                        `📝 Captured commit: ${meaningfulMessage.substring(0, 50)}${meaningfulMessage.length > 50 ? '...' : ''}`,
-                        { modal: false }
-                    );
+                    if (!tags.includes('ai-enriched')) {
+                        vscode.window.showInformationMessage(
+                            `📝 Captured commit: ${meaningfulMessage.substring(0, 50)}${meaningfulMessage.length > 50 ? '...' : ''}`,
+                            { modal: false }
+                        );
+                    }
 
                     Logger.info(`Git commit captured: ${meaningfulMessage}`);
                 }
@@ -201,6 +241,9 @@ export class GitMonitor {
         if (this.gitWatcher) {
             this.gitWatcher.dispose();
             Logger.info('Git monitor disposed');
+        }
+        if (this.mcpClient) {
+            this.mcpClient.disconnect();
         }
     }
 }

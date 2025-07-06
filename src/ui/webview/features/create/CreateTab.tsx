@@ -1,5 +1,5 @@
 import { Component, createSignal } from 'solid-js';
-import { Eye, Lightbulb, Folder } from 'lucide-solid';
+import { Eye, Lightbulb, Folder, Edit, Check } from 'lucide-solid';
 import { appController } from '../../core/app-controller';
 import type { ContextEntry } from '../../../../core/database/types';
 import ContentCard from '../../components/ContentCard';
@@ -67,7 +67,7 @@ const CreateTab: Component = () => {
 
   return (
     <div class="create-tab">
-      <ContentCard title="Create Custom Context" icon="✏️">
+      <ContentCard title="Create Custom Context" icon={<Edit size={20} />}>
         <form onSubmit={handleSubmit} class="create-form">
           <div class="form-group">
             <label for="content" class="form-label">
@@ -166,7 +166,7 @@ const CreateTab: Component = () => {
             
             {successMessage() && (
               <div class="success-message">
-                ✅ {successMessage()}
+                <Check size={16} class="inline" /> {successMessage()}
               </div>
             )}
           </div>

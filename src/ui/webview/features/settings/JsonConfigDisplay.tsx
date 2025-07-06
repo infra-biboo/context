@@ -1,5 +1,5 @@
 import { Component, Show } from 'solid-js';
-import { ClipboardList, AlertTriangle } from 'lucide-solid';
+import { ClipboardList, AlertTriangle, Check } from 'lucide-solid';
 import { DatabaseConfig } from '../../../../core/database/types';
 
 interface JsonConfigDisplayProps {
@@ -26,10 +26,10 @@ const JsonConfigDisplay: Component<JsonConfigDisplayProps> = (props) => {
       <div class="config-info">
         <h4><ClipboardList size={16} style={{'margin-right': '8px', display: 'inline'}} /> JSON Mode Features</h4>
         <ul>
-          <li>✅ <strong>Fast:</strong> No network overhead</li>
-          <li>✅ <strong>Simple:</strong> No setup required</li>
-          <li>✅ <strong>Portable:</strong> File can be shared easily</li>
-          <li>⚠️ <strong>Limited:</strong> Context limit prevents memory issues</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Fast:</strong> No network overhead</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Simple:</strong> No setup required</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Portable:</strong> File can be shared easily</li>
+          <li><AlertTriangle size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Limited:</strong> Context limit prevents memory issues</li>
         </ul>
       </div>
 

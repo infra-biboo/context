@@ -1,5 +1,5 @@
 import { Component, createSignal, Show } from 'solid-js';
-import { EyeOff, Eye, Database, AlertTriangle } from 'lucide-solid';
+import { EyeOff, Eye, Database, AlertTriangle, Check } from 'lucide-solid';
 import { DatabaseConfig } from '../../../../core/database/types';
 
 interface PostgresConfigFormProps {
@@ -114,11 +114,11 @@ const PostgresConfigForm: Component<PostgresConfigFormProps> = (props) => {
       <div class="config-info">
         <h4><Database size={16} style={{'margin-right': '8px', display: 'inline'}} /> PostgreSQL Mode Features</h4>
         <ul>
-          <li>✅ <strong>Unlimited:</strong> No context limits</li>
-          <li>✅ <strong>Scalable:</strong> Handles large datasets</li>
-          <li>✅ <strong>Vector Search:</strong> Semantic similarity search</li>
-          <li>✅ <strong>Team Ready:</strong> Multi-user support</li>
-          <li>⚠️ <strong>Setup Required:</strong> PostgreSQL server needed</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Unlimited:</strong> No context limits</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Scalable:</strong> Handles large datasets</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Vector Search:</strong> Semantic similarity search</li>
+          <li><Check size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Team Ready:</strong> Multi-user support</li>
+          <li><AlertTriangle size={16} style={{'margin-right': '4px', display: 'inline'}} /> <strong>Setup Required:</strong> PostgreSQL server needed</li>
         </ul>
       </div>
 

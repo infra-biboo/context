@@ -80,6 +80,9 @@ class AppController {
             actions.setMcpStatus(data.mcpStatus);
             actions.setTokenUsage(data.tokenUsage);
             actions.setStats(data.stats);
+            if (data.config) {
+                actions.setConfig(data.config);
+            }
             
             // Check onboarding status from localStorage
             const onboardingCompleted = localStorage.getItem('claude-context-onboarding-completed') === 'true';
@@ -285,6 +288,24 @@ class AppController {
             actions.setOnboardingCompleted(true);
         } catch (error) {
             actions.setError(error instanceof Error ? error.message : 'Failed to complete onboarding');
+        }
+    }
+
+    public async toggleGitCapture(enabled: boolean) {
+        try {
+            const config = await bridge.sendRequest('capture.toggleGit', { enabled });
+            actions.setConfig(config);
+        } catch (error) {
+            actions.setError(error instanceof Error ? error.message : 'Failed to toggle git capture');
+        }
+    }
+
+    public async toggleFileCapture(enabled: boolean) {
+        try {
+            const config = await bridge.sendRequest('capture.toggleFile', { enabled });
+            actions.setConfig(config);
+        } catch (error) {
+            actions.setError(error instanceof Error ? error.message : 'Failed to toggle file capture');
         }
     }
 

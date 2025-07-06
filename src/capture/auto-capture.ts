@@ -30,7 +30,7 @@ export class AutoCapture {
         const workspaceRoot = workspaceFolders[0].uri.fsPath;
         
         // Initialize monitors
-        this.gitMonitor = new GitMonitor(this.database, workspaceRoot);
+        this.gitMonitor = new GitMonitor(this.database, workspaceRoot, this.extensionContext.extensionPath, this.extensionContext);
         this.fileMonitor = new FileMonitor(this.database, workspaceRoot);
 
         // Start monitors based on configuration

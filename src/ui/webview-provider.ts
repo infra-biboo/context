@@ -95,6 +95,9 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 case 'app':
                      responsePayload = await this.handleAppActions(action, payload);
                      break;
+                case 'capture':
+                    responsePayload = await this.handleCaptureActions(action, payload);
+                    break;
                 default:
                     throw new Error(`Unknown command domain: ${domain}`);
             }
@@ -123,6 +126,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 const mcpStatus = this.mcpServer.getConnectionInfo();
                 const onboardingCompleted = this.configStore.getOnboardingCompleted();
                 const tokenUsage = this.tokenMonitor.getCurrentUsage();
+                const config = this.configStore.getConfig();
 
                 return {
                     contexts,
@@ -131,6 +135,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                     mcpStatus,
                     onboardingCompleted,
                     tokenUsage,
+                    config,
                     stats: { totalContexts: contexts.length, byType: {}, byProject: {}, adapterType: databaseConfig.type }
                 };
             case 'completeOnboarding':
@@ -220,6 +225,19 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 return this.mcpServer.getConnectionInfo();
             default:
                 throw new Error(`Unknown MCP action: ${action}`);
+        }
+    }
+
+    private async handleCaptureActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'toggleGit':
+                await this.autoCapture.toggleGitMonitoring();
+                return this.configStore.getConfig();
+            case 'toggleFile':
+                await this.autoCapture.toggleFileMonitoring();
+                return this.configStore.getConfig();
+            default:
+                throw new Error(`Unknown capture action: ${action}`);
         }
     }
 

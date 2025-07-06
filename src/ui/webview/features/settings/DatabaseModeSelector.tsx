@@ -1,5 +1,5 @@
 import { Component } from 'solid-js';
-import { FileText, Database } from 'lucide-solid';
+import { FileText, Database, Check, AlertTriangle } from 'lucide-solid';
 
 interface DatabaseModeSelectorProps {
   currentMode: 'json' | 'postgresql' | 'hybrid';
@@ -26,9 +26,9 @@ const DatabaseModeSelector: Component<DatabaseModeSelectorProps> = (props) => {
             Local JSON file storage with context limit. Perfect for individual development.
           </p>
           <div class="mode-features">
-            <span class="feature">✅ Fast setup</span>
-            <span class="feature">✅ No external dependencies</span>
-            <span class="feature">⚠️ Limited to 1000 contexts</span>
+            <span class="feature"><Check size={12} style={{'margin-right': '4px', display: 'inline'}} /> Fast setup</span>
+            <span class="feature"><Check size={12} style={{'margin-right': '4px', display: 'inline'}} /> No external dependencies</span>
+            <span class="feature"><AlertTriangle size={12} style={{'margin-right': '4px', display: 'inline'}} /> Limited to 1000 contexts</span>
           </div>
         </div>
       </label>
@@ -50,10 +50,10 @@ const DatabaseModeSelector: Component<DatabaseModeSelectorProps> = (props) => {
             PostgreSQL database with unlimited contexts and vector search capabilities.
           </p>
           <div class="mode-features">
-            <span class="feature">✅ Unlimited contexts</span>
-            <span class="feature">✅ Vector search</span>
-            <span class="feature">✅ Team collaboration</span>
-            <span class="feature">⚠️ Requires PostgreSQL setup</span>
+            <span class="feature"><Check size={12} style={{'margin-right': '4px', display: 'inline'}} /> Unlimited contexts</span>
+            <span class="feature"><Check size={12} style={{'margin-right': '4px', display: 'inline'}} /> Vector search</span>
+            <span class="feature"><Check size={12} style={{'margin-right': '4px', display: 'inline'}} /> Team collaboration</span>
+            <span class="feature"><AlertTriangle size={12} style={{'margin-right': '4px', display: 'inline'}} /> Requires PostgreSQL setup</span>
           </div>
         </div>
       </label>

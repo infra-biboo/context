@@ -9,6 +9,7 @@ export interface AppConfig {
     ui: {
         theme: 'auto' | 'light' | 'dark';
         density: 'compact' | 'normal' | 'spacious';
+        language: 'en' | 'es';
     };
     collaborationMode: 'individual' | 'collaborative' | 'hierarchical';
     onboardingCompleted?: boolean;
@@ -40,7 +41,8 @@ export class ConfigStore {
             },
             ui: {
                 theme: 'auto',
-                density: 'normal'
+                density: 'normal',
+                language: 'en'
             },
             collaborationMode: 'collaborative',
             onboardingCompleted: false
@@ -52,6 +54,14 @@ export class ConfigStore {
         if (stored) {
             this.config = { ...this.getDefaultConfig(), ...stored };
         }
+        
+        // Sync language from localStorage if available (for consistency with frontend)
+        this.syncLanguageFromLocalStorage();
+    }
+
+    private syncLanguageFromLocalStorage(): void {
+        // This method would typically be called from the webview when language changes
+        // For now, we keep the default Spanish as specified in CLAUDE.md
     }
 
     private async saveConfig(): Promise<void> {

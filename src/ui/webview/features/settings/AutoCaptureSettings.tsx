@@ -1,18 +1,17 @@
-import { Component, createSignal } from 'solid-js';
+import { Component } from 'solid-js';
 import { appController } from '../../core/app-controller';
+import { store } from '../../core/store';
+import { Check, X } from 'lucide-solid';
 
 const AutoCaptureSettings: Component = () => {
-  const [gitCapture, setGitCapture] = createSignal(false);
-  const [fileCapture, setFileCapture] = createSignal(false);
-
   const handleToggleGitCapture = () => {
-    setGitCapture(!gitCapture());
-    // appController.toggleGitCapture(!gitCapture());
+    const currentValue = store.session.config?.capture.gitCommits ?? true;
+    appController.toggleGitCapture(!currentValue);
   };
 
   const handleToggleFileCapture = () => {
-    setFileCapture(!fileCapture());
-    // appController.toggleFileCapture(!fileCapture());
+    const currentValue = store.session.config?.capture.fileChanges ?? true;
+    appController.toggleFileCapture(!currentValue);
   };
 
   return (
@@ -22,7 +21,7 @@ const AutoCaptureSettings: Component = () => {
         <label class="capture-option">
           <input
             type="checkbox"
-            checked={gitCapture()}
+            checked={store.session.config?.capture.gitCommits ?? true}
             onChange={handleToggleGitCapture}
           />
           Capture Git Commits
@@ -30,13 +29,13 @@ const AutoCaptureSettings: Component = () => {
         <label class="capture-option">
           <input
             type="checkbox"
-            checked={fileCapture()}
+            checked={store.session.config?.capture.fileChanges ?? true}
             onChange={handleToggleFileCapture}
           />
           Monitor File Changes
         </label>
         <div class="capture-status">
-          Status: Git: {gitCapture() ? '✅' : '❌'} | Files: {fileCapture() ? '✅' : '❌'}
+          Status: Git: {(store.session.config?.capture.gitCommits ?? true) ? <Check size={16} style={{'margin-left': '4px', display: 'inline'}} /> : <X size={16} style={{'margin-left': '4px', display: 'inline'}} />} | Files: {(store.session.config?.capture.fileChanges ?? true) ? <Check size={16} style={{'margin-left': '4px', display: 'inline'}} /> : <X size={16} style={{'margin-left': '4px', display: 'inline'}} />}
         </div>
       </div>
     </div>

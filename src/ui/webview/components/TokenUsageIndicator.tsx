@@ -28,34 +28,38 @@ const TokenUsageIndicator: Component = () => {
   });
 
   return (
-    <Show when={store.session.tokenUsage}>
-      <div class="token-usage-indicator">
-        <div class="token-usage-main">
-          <span class="token-icon">{getUsageIcon()({ size: 16 })}</span>
-          <span class="token-percentage">
-            {store.session.tokenUsage?.percentage.toFixed(1)}%
-          </span>
-          <div class="token-bar">
-            <div 
-              class="token-fill"
-              style={{
-                width: `${store.session.tokenUsage?.percentage || 0}%`,
-                'background-color': getUsageColor()
-              }}
-            />
-          </div>
-        </div>
-        <div class="token-details">
-          <Show when={store.session.tokenUsage}>
-            <span class="token-reset">
-              Reset en {store.session.tokenUsage?.resetTime}
+    <Show when={store.session.tokenUsage} fallback={<div>Loading token usage...</div>}>
+      {(usage) => (
+        <div class="token-usage-indicator">
+          <div class="token-usage-main">
+            <span class="token-icon">{getUsageIcon()({ size: 16 })}</span>
+            <span class="token-percentage">
+              {typeof usage().percentage === 'number'
+                ? `${usage().percentage.toFixed(1)}%`
+                : 'N/A'}
             </span>
-            <Show when={store.session.tokenUsage?.isNearLimit}>
+            <div class="token-bar">
+              <div 
+                class="token-fill"
+                style={{
+                  width: `${usage().percentage || 0}%`,
+                  'background-color': getUsageColor()
+                }}
+              />
+            </div>
+          </div>
+          <div class="token-details">
+            <Show when={usage().resetTime}>
+              <span class="token-reset">
+                Reset en {usage().resetTime}
+              </span>
+            </Show>
+            <Show when={usage().isNearLimit}>
               <span class="token-warning">¡Cerca del límite!</span>
             </Show>
-          </Show>
+          </div>
         </div>
-      </div>
+      )}
     </Show>
   );
 };

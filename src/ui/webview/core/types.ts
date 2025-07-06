@@ -1,4 +1,21 @@
 import type { ContextEntry, DatabaseAgent, DatabaseConfig, DatabaseStats } from '../../../core/database/types';
+import { Signal } from 'solid-js';
+
+// --- Communication Bridge Contract ---
+
+/**
+ * Defines a strict contract for any communication bridge (real or mock).
+ * This ensures that both the real VSCode bridge and the mock bridge have the exact same
+ * function signatures, resolving TypeScript ambiguity.
+ */
+export interface IBridge {
+  sendRequest<T = any>(command: string, payload: any): Promise<T>;
+  onResponse(): Signal<WebviewResponse | null>;
+  getMCPStatus(): Promise<MCPStatus>;
+  toggleAgent(agentId: string): Promise<any>;
+  setCollaborationMode(mode: CollaborationMode): Promise<any>;
+}
+
 
 // --- Tipos de Dominio Específicos (Conservados) ---
 

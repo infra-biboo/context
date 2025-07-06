@@ -1,43 +1,46 @@
 import type { WebviewApi } from "vscode-webview";
 import { createSignal, Signal } from "solid-js";
-import type { WebviewRequest, WebviewResponse, MCPStatus, CollaborationMode } from './types';
+import type { WebviewRequest, WebviewResponse, MCPStatus, CollaborationMode, IBridge } from './types';
+import { mockBridge } from './vscode-bridge.mock';
 
 // VS Code webview API declaration
 declare function acquireVsCodeApi(): WebviewApi<unknown>;
 
 /**
- * A pure communication bridge between the webview and the VS Code extension host.
- * It uses the WebviewRequest/WebviewResponse protocol for type-safe, tracked communication.
+ * This constant is the main switch for toggling between the real VSCode API and the mock.
+ * It checks if the `acquireVsCodeApi` function exists, which is only true when running
+ * inside a real VSCode webview.
  */
-export class VSCodeBridge {
+const isVsCode = typeof acquireVsCodeApi === 'function';
+
+/**
+ * The real implementation of the bridge that communicates with the VS Code extension host.
+ * It implements the IBridge interface to ensure a consistent contract.
+ * 
+ * TO REVERT: Remove `implements IBridge` from the class definition.
+ */
+export class VSCodeBridge implements IBridge {
     private static instance: VSCodeBridge;
-    private readonly vscode: WebviewApi<unknown>;
+    private readonly vscode: WebviewApi<unknown> | null;
     
-    // The reactive signal that will fire with a new response whenever one is received.
     private incomingResponse: Signal<WebviewResponse | null>;
-    
-    // Generate unique request IDs
     private requestCounter = 0;
 
     private constructor() {
-        this.vscode = acquireVsCodeApi();
+        this.vscode = isVsCode ? acquireVsCodeApi() : null;
         this.incomingResponse = createSignal<WebviewResponse | null>(null);
         
-        // Listen for all messages from the extension host.
-        window.addEventListener('message', (event: MessageEvent) => {
-            const response = event.data as WebviewResponse;
-            if (response && response.requestId) {
-                // Set the signal's value to the new response.
-                // The AppController will be listening to this signal.
-                const [, setSignal] = this.incomingResponse;
-                setSignal(response);
-            }
-        });
+        if (this.vscode) {
+            window.addEventListener('message', (event: MessageEvent) => {
+                const response = event.data as WebviewResponse;
+                if (response && response.requestId) {
+                    const [, setSignal] = this.incomingResponse;
+                    setSignal(response);
+                }
+            });
+        }
     }
 
-    /**
-     * Gets the singleton instance of the VSCodeBridge.
-     */
     public static getInstance(): VSCodeBridge {
         if (!VSCodeBridge.instance) {
             VSCodeBridge.instance = new VSCodeBridge();
@@ -45,24 +48,22 @@ export class VSCodeBridge {
         return VSCodeBridge.instance;
     }
 
-    /**
-     * Generates a unique request ID
-     */
     private generateRequestId(): string {
         return `req-${Date.now()}-${++this.requestCounter}`;
     }
 
-    /**
-     * Sends a request and waits for a response
-     */
     public sendRequest<T = any>(command: string, payload: any): Promise<T> {
+        if (!this.vscode) {
+            // This check prevents errors when running in a browser without the mock.
+            console.error('VSCode API is not available. Did you mean to run in dev mode?');
+            return Promise.reject(new Error('VSCode API not available.'));
+        }
+
+        // Assign this.vscode to a local constant to satisfy TypeScript's strict null checks inside the Promise.
+        const vscode = this.vscode;
+
         const requestId = this.generateRequestId();
-        
-        const request: WebviewRequest = {
-            command,
-            payload,
-            requestId
-        };
+        const request: WebviewRequest = { command, payload, requestId };
 
         return new Promise((resolve, reject) => {
             const listener = (event: MessageEvent) => {
@@ -78,10 +79,8 @@ export class VSCodeBridge {
             };
             window.addEventListener('message', listener);
             
-            // Send the request
-            this.vscode.postMessage(request);
+            vscode.postMessage(request);
             
-            // Set a timeout
             setTimeout(() => {
                 window.removeEventListener('message', listener);
                 reject(new Error(`Request ${command} timed out`));
@@ -89,27 +88,11 @@ export class VSCodeBridge {
         });
     }
 
-    /**
-     * Sends a message without expecting a response (fire-and-forget)
-     */
-    public postMessage(command: string, payload: any): void {
-        const request: WebviewRequest = {
-            command,
-            payload,
-            requestId: this.generateRequestId()
-        };
-        this.vscode.postMessage(request);
-    }
-
-    /**
-     * Returns the reactive signal for incoming responses.
-     * The AppController can create an effect on this signal to react to unsolicited messages.
-     */
     public onResponse(): Signal<WebviewResponse | null> {
         return this.incomingResponse;
     }
 
-    // --- Convenience methods for common requests ---
+    // --- Convenience methods ---
 
     public getMCPStatus(): Promise<MCPStatus> {
         return this.sendRequest('mcp.getStatus', {});
@@ -124,5 +107,12 @@ export class VSCodeBridge {
     }
 }
 
-// Export a singleton instance for easy access
-export const bridge = VSCodeBridge.getInstance();
+/**
+ * This is the master export that determines which bridge to use.
+ * It uses the `isVsCode` constant to decide.
+ * 
+ * TO REVERT TO ORIGINAL LOGIC (NO DEV MODE):
+ * Change this line to:
+ * `export const bridge = VSCodeBridge.getInstance();`
+ */
+export const bridge: IBridge = isVsCode ? VSCodeBridge.getInstance() : mockBridge;

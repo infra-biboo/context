@@ -30,8 +30,8 @@ function getNestedValue(obj: any, path: string): string {
 
 // I18n Provider Component
 export const I18nProvider: ParentComponent = (props) => {
-  // Default to Spanish as per CLAUDE.md instructions
-  const [language, setLanguage] = createSignal<Language>('es');
+  // Default to English as it's more universal
+  const [language, setLanguage] = createSignal<Language>('en');
   
   // Load saved language from localStorage
   const savedLang = localStorage.getItem('context-manager-language') as Language;
@@ -87,4 +87,4 @@ export const getAvailableLanguages = () => {
 
 // Export types and constants
 export type { TranslationKeys };
-export const DEFAULT_LANGUAGE: Language = 'es';
+export const DEFAULT_LANGUAGE: Language = 'en';

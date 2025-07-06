@@ -2,6 +2,7 @@ import { createStore } from 'solid-js/store';
 import { createMemo } from 'solid-js';
 import type { ContextEntry, DatabaseAgent, DatabaseConfig, DatabaseStats } from '../../../core/database/types';
 import type { SimpleTokenUsage } from '../../../core/simple-token-monitor';
+import type { AppConfig } from '../../../core/config-store';
 
 // 1. Define the shape of our state
 interface AppState {
@@ -26,6 +27,7 @@ interface AppState {
     databaseConfig: DatabaseConfig;
     connectionStatus: 'connected' | 'disconnected' | 'connecting';
     tokenUsage: SimpleTokenUsage | null;
+    config: AppConfig | null;
   };
 }
 
@@ -50,6 +52,7 @@ const [state, setState] = createStore<AppState>({
     databaseConfig: { type: 'json', json: { path: '', maxContexts: 0 } },
     connectionStatus: 'connecting',
     tokenUsage: null,
+    config: null,
   },
 });
 
@@ -120,6 +123,7 @@ export const actions = {
   setDatabaseConfig: (config: DatabaseConfig) => setState('session', 'databaseConfig', config),
   setConnectionStatus: (status: AppState['session']['connectionStatus']) => setState('session', 'connectionStatus', status),
   setTokenUsage: (usage: SimpleTokenUsage | null) => setState('session', 'tokenUsage', usage),
+  setConfig: (config: AppConfig) => setState('session', 'config', config),
   setStats: (stats: DatabaseStats) => {
     // Stats are derived from contexts data via computed.stats
     // This method exists for compatibility with initial data load from backend
@@ -155,6 +159,7 @@ export const actions = {
       databaseConfig: { type: 'json', json: { path: '', maxContexts: 0 } },
       connectionStatus: 'connecting',
       tokenUsage: null,
+      config: null,
     });
   }
 };
