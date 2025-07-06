@@ -106,3 +106,4 @@ export async function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
     Logger.info('Claude Context Manager deactivated');
 }
+
