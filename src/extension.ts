@@ -40,20 +40,20 @@ export async function activate(context: vscode.ExtensionContext) {
     const configStore = ConfigStore.getInstance(context);
     Logger.info(`Configuration loaded: ${JSON.stringify(configStore.getConfig().capture)}`);
     
-    // Initialize auto-capture system
-    const autoCapture = new AutoCapture(contextManager.getDatabase(), context);
-    await autoCapture.initialize();
-    
-    // Initialize agent manager
+    // Initialize agent manager first
     const agentManager = new AgentManager(database, configStore);
     await agentManager.initialize();
     
-    // Initialize simple token monitor
-    const tokenMonitor = new SimpleTokenMonitor();
-    
-    // Initialize MCP server with shared database (unified data source)
+    // Initialize MCP server with agent manager
     const mcpServer = new MCPServer(database, agentManager);
     const mcpConfigGenerator = new MCPConfigGenerator(context.extensionPath);
+    
+    // Initialize auto-capture system with MCP server
+    const autoCapture = new AutoCapture(contextManager.getDatabase(), context, mcpServer);
+    await autoCapture.initialize();
+    
+    // Initialize simple token monitor
+    const tokenMonitor = new SimpleTokenMonitor();
     
     // Start MCP server
     try {

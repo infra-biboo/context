@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { ContextDatabase } from '../core/database';
 import { Logger } from '../utils/logger';
 import { MCPClient } from '../mcp/mcp-client';
+import { MCPServer } from '../mcp/server';
 import { ConfigStore } from '../core/config-store';
 
 export class GitMonitor {
@@ -15,11 +16,11 @@ export class GitMonitor {
     constructor(
         private database: ContextDatabase,
         private workspaceRoot: string,
-        private extensionPath?: string,
-        private extensionContext?: any
+        private extensionContext?: any,
+        private mcpServer?: MCPServer
     ) {
-        if (extensionPath && extensionContext) {
-            this.mcpClient = new MCPClient(extensionPath, extensionContext);
+        if (extensionContext) {
+            this.mcpClient = new MCPClient(extensionContext, mcpServer);
         }
     }
 
@@ -54,35 +55,21 @@ export class GitMonitor {
     private shouldProcessGitChange(uri: vscode.Uri): boolean {
         const fileName = path.basename(uri.fsPath);
         
-        // Monitor specific git files that indicate commits
-        const monitoredFiles = [
-            'COMMIT_EDITMSG',
-            'ORIG_HEAD',
-            'HEAD'
-        ];
-        
-        return monitoredFiles.includes(fileName) && this.enabled;
+        // Only monitor COMMIT_EDITMSG to avoid duplicates
+        // This file is created/modified only when a commit is made
+        return fileName === 'COMMIT_EDITMSG' && this.enabled;
     }
 
     private async handleGitChange(uri: vscode.Uri): Promise<void> {
-        const fileName = path.basename(uri.fsPath);
-        
         // Prevent duplicate processing of the same commit
         const now = Date.now();
-        if (now - this.lastCommitTime < 2000) {
+        if (now - this.lastCommitTime < 3000) { // Increased to 3 seconds
             return;
         }
 
         try {
-            switch (fileName) {
-                case 'COMMIT_EDITMSG':
-                    await this.handleCommitMessage(uri);
-                    break;
-                case 'HEAD':
-                case 'ORIG_HEAD':
-                    await this.handleHeadChange();
-                    break;
-            }
+            // Only handle COMMIT_EDITMSG since that's all we're monitoring now
+            await this.handleCommitMessage(uri);
         } catch (error) {
             Logger.error('Error handling git change:', error as Error);
         }

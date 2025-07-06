@@ -3,6 +3,7 @@ import { GitMonitor } from './git-monitor';
 import { FileMonitor } from './file-monitor';
 import { ContextDatabase } from '../core/database';
 import { ConfigStore } from '../core/config-store';
+import { MCPServer } from '../mcp/server';
 import { Logger } from '../utils/logger';
 
 export class AutoCapture {
@@ -13,7 +14,8 @@ export class AutoCapture {
 
     constructor(
         private database: ContextDatabase,
-        private extensionContext: vscode.ExtensionContext
+        private extensionContext: vscode.ExtensionContext,
+        private mcpServer?: MCPServer
     ) {
         this.configStore = ConfigStore.getInstance(extensionContext);
         this.setupConfigListener();
@@ -30,7 +32,7 @@ export class AutoCapture {
         const workspaceRoot = workspaceFolders[0].uri.fsPath;
         
         // Initialize monitors
-        this.gitMonitor = new GitMonitor(this.database, workspaceRoot, this.extensionContext.extensionPath, this.extensionContext);
+        this.gitMonitor = new GitMonitor(this.database, workspaceRoot, this.extensionContext, this.mcpServer);
         this.fileMonitor = new FileMonitor(this.database, workspaceRoot);
 
         // Start monitors based on configuration
