@@ -22,6 +22,7 @@ export class MCPClient {
         private mcpServer?: MCPServer
     ) {
         this.configStore = ConfigStore.getInstance(extensionContext);
+        Logger.info(`MCPClient created. MCPServer available: ${!!mcpServer}`);
     }
 
     /**

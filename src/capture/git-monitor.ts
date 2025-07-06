@@ -21,6 +21,9 @@ export class GitMonitor {
     ) {
         if (extensionContext) {
             this.mcpClient = new MCPClient(extensionContext, mcpServer);
+            Logger.info(`GitMonitor initialized with MCPClient. MCPServer available: ${!!mcpServer}`);
+        } else {
+            Logger.warn('GitMonitor initialized without extension context - MCP disabled');
         }
     }
 
