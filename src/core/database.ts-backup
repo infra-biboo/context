@@ -1,0 +1,623 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as sqlite3 from 'sqlite3';
+import { Logger } from '../utils/logger';
+
+export interface ContextEntry {
+    id: string;
+    projectPath: string;
+    type: 'conversation' | 'decision' | 'code' | 'issue';
+    content: string;
+    timestamp: Date;
+    importance: number;
+    tags: string[];
+}
+
+export interface DatabaseAgent {
+    id: string;
+    name: string;
+    description: string;
+    emoji?: string;
+    specializations: string[];
+    color?: string;
+    enabled: boolean;
+    isCustom: boolean;
+    prompt?: string;
+}
+
+interface ContextRow {
+    id: string;
+    projectPath: string;
+    type: string;
+    content: string;
+    timestamp: string;
+    importance: number;
+    tags: string;
+}
+
+interface AgentRow {
+    id: string;
+    name: string;
+    description: string;
+    emoji: string | null;
+    specializations: string;
+    color: string | null;
+    enabled: number;
+    isCustom: number;
+    prompt: string | null;
+}
+
+export class ContextDatabase {
+    private db: sqlite3.Database;
+
+    constructor(private extensionContext: vscode.ExtensionContext) {
+        // Ensure storage directory exists
+        this.ensureStorageDir();
+        
+        // Initialize SQLite database
+        const dbPath = path.join(
+            extensionContext.globalStorageUri.fsPath, 
+            'context.db'
+        );
+        
+        this.db = new sqlite3.Database(dbPath);
+        this.initialize();
+    }
+
+    private async ensureStorageDir(): Promise<void> {
+        const fs = await import('fs/promises');
+        await fs.mkdir(
+            this.extensionContext.globalStorageUri.fsPath, 
+            { recursive: true }
+        );
+    }
+
+    private initialize(): void {
+        try {
+            // Create table if not exists
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS contexts (
+                    id TEXT PRIMARY KEY,
+                    projectPath TEXT NOT NULL,
+                    type TEXT NOT NULL CHECK (type IN ('conversation', 'decision', 'code', 'issue')),
+                    content TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    importance INTEGER NOT NULL DEFAULT 5,
+                    tags TEXT DEFAULT '[]'
+                )
+            `);
+
+            // Create agents table
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS agents (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    description TEXT NOT NULL,
+                    emoji TEXT,
+                    specializations TEXT NOT NULL,
+                    color TEXT,
+                    enabled BOOLEAN NOT NULL DEFAULT 1,
+                    isCustom BOOLEAN NOT NULL DEFAULT 0,
+                    prompt TEXT
+                )
+            `);
+
+            // Create indexes for performance
+            this.db.exec(`
+                CREATE INDEX IF NOT EXISTS idx_contexts_type ON contexts(type);
+                CREATE INDEX IF NOT EXISTS idx_contexts_timestamp ON contexts(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_contexts_project_path ON contexts(projectPath);
+                CREATE INDEX IF NOT EXISTS idx_contexts_importance ON contexts(importance);
+                CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+                CREATE INDEX IF NOT EXISTS idx_agents_enabled ON agents(enabled);
+                CREATE INDEX IF NOT EXISTS idx_agents_isCustom ON agents(isCustom);
+            `);
+
+            // Enable foreign keys
+            this.db.exec('PRAGMA foreign_keys = ON');
+            
+            Logger.info('SQLite database initialized successfully');
+        } catch (error) {
+            Logger.error('Failed to initialize SQLite database:', error);
+            throw error;
+        }
+    }
+
+    async addContext(entry: Omit<ContextEntry, 'id' | 'timestamp'>): Promise<string> {
+        const id = `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const timestamp = new Date().toISOString();
+        
+        return new Promise((resolve, reject) => {
+            this.db.run(
+                `INSERT INTO contexts (id, projectPath, type, content, timestamp, importance, tags)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [id, entry.projectPath, entry.type, entry.content, timestamp, entry.importance, JSON.stringify(entry.tags)],
+                function(err) {
+                    if (err) {
+                        Logger.error('Failed to add context:', err);
+                        reject(err);
+                    } else {
+                        Logger.info(`Context added: ${id}`);
+                        resolve(id);
+                    }
+                }
+            );
+        });
+    }
+
+    async getContexts(projectPath?: string): Promise<ContextEntry[]> {
+        return new Promise((resolve, reject) => {
+            let query = 'SELECT * FROM contexts';
+            let params: any[] = [];
+            
+            if (projectPath) {
+                query += ' WHERE projectPath = ?';
+                params.push(projectPath);
+            }
+            
+            query += ' ORDER BY timestamp DESC';
+            
+            this.db.all(query, params, (err, rows: ContextRow[]) => {
+                if (err) {
+                    Logger.error('Failed to get contexts:', err);
+                    reject(err);
+                } else {
+                    resolve(rows.map(this.rowToContextEntry));
+                }
+            });
+        });
+    }
+
+    async getContextById(id: string): Promise<ContextEntry | undefined> {
+        return new Promise((resolve, reject) => {
+            this.db.get('SELECT * FROM contexts WHERE id = ?', [id], (err, row: ContextRow | undefined) => {
+                if (err) {
+                    Logger.error('Failed to get context by id:', err);
+                    reject(err);
+                } else {
+                    resolve(row ? this.rowToContextEntry(row) : undefined);
+                }
+            });
+        });
+    }
+
+    async updateContext(id: string, updates: Partial<Omit<ContextEntry, 'id' | 'timestamp'>>): Promise<void> {
+        try {
+            // Check if context exists
+            const existing = await this.getContextById(id);
+            if (!existing) {
+                throw new Error(`Context with id ${id} not found`);
+            }
+
+            // Build dynamic update query
+            const fields: string[] = [];
+            const values: any[] = [];
+            
+            if (updates.projectPath !== undefined) {
+                fields.push('projectPath = ?');
+                values.push(updates.projectPath);
+            }
+            if (updates.type !== undefined) {
+                fields.push('type = ?');
+                values.push(updates.type);
+            }
+            if (updates.content !== undefined) {
+                fields.push('content = ?');
+                values.push(updates.content);
+            }
+            if (updates.importance !== undefined) {
+                fields.push('importance = ?');
+                values.push(updates.importance);
+            }
+            if (updates.tags !== undefined) {
+                fields.push('tags = ?');
+                values.push(JSON.stringify(updates.tags));
+            }
+            
+            if (fields.length === 0) {
+                return; // Nothing to update
+            }
+            
+            values.push(id); // Add ID for WHERE clause
+            
+            const stmt = this.db.prepare(`
+                UPDATE contexts 
+                SET ${fields.join(', ')} 
+                WHERE id = ?
+            `);
+            
+            stmt.run(...values);
+            Logger.info(`Context updated: ${id}`);
+        } catch (error) {
+            Logger.error('Failed to update context:', error);
+            throw error;
+        }
+    }
+
+    async deleteContext(id: string): Promise<void> {
+        try {
+            const stmt = this.db.prepare('DELETE FROM contexts WHERE id = ?');
+            const result = stmt.run(id);
+            
+            if (result.changes === 0) {
+                throw new Error(`Context with id ${id} not found`);
+            }
+            
+            Logger.info(`Context deleted: ${id}`);
+        } catch (error) {
+            Logger.error('Failed to delete context:', error);
+            throw error;
+        }
+    }
+
+    async searchContexts(query: string, options: {
+        type?: string;
+        projectPath?: string;
+        tags?: string[];
+        importance?: number;
+        limit?: number;
+        offset?: number;
+    } = {}): Promise<ContextEntry[]> {
+        try {
+            let sql = 'SELECT * FROM contexts WHERE 1=1';
+            const params: any[] = [];
+            
+            // Filter by project path
+            if (options.projectPath) {
+                sql += ' AND projectPath = ?';
+                params.push(options.projectPath);
+            }
+            
+            // Filter by type
+            if (options.type && options.type !== 'all') {
+                sql += ' AND type = ?';
+                params.push(options.type);
+            }
+            
+            // Filter by minimum importance
+            if (options.importance !== undefined) {
+                sql += ' AND importance >= ?';
+                params.push(options.importance);
+            }
+            
+            // Text search in content
+            if (query && query.trim()) {
+                sql += ' AND (content LIKE ? OR tags LIKE ?)';
+                const searchTerm = `%${query.toLowerCase().trim()}%`;
+                params.push(searchTerm, searchTerm);
+            }
+            
+            // Filter by tags (if any tag matches)
+            if (options.tags && options.tags.length > 0) {
+                const tagConditions = options.tags.map(() => 'tags LIKE ?').join(' OR ');
+                sql += ` AND (${tagConditions})`;
+                options.tags.forEach(tag => {
+                    params.push(`%"${tag}"%`);
+                });
+            }
+            
+            // Order by importance and timestamp (relevance score)
+            sql += ' ORDER BY importance DESC, timestamp DESC';
+            
+            // Apply limit and offset
+            if (options.limit) {
+                sql += ' LIMIT ?';
+                params.push(options.limit);
+                
+                if (options.offset) {
+                    sql += ' OFFSET ?';
+                    params.push(options.offset);
+                }
+            }
+            
+            const stmt = this.db.prepare(sql);
+            const rows = stmt.all(...params) as ContextRow[];
+            
+            return rows.map(this.rowToContextEntry);
+        } catch (error) {
+            Logger.error('Failed to search contexts:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get total count of contexts (useful for pagination)
+     */
+    async getContextCount(options: {
+        type?: string;
+        projectPath?: string;
+    } = {}): Promise<number> {
+        try {
+            let sql = 'SELECT COUNT(*) as count FROM contexts WHERE 1=1';
+            const params: any[] = [];
+            
+            if (options.projectPath) {
+                sql += ' AND projectPath = ?';
+                params.push(options.projectPath);
+            }
+            
+            if (options.type && options.type !== 'all') {
+                sql += ' AND type = ?';
+                params.push(options.type);
+            }
+            
+            const stmt = this.db.prepare(sql);
+            const result = stmt.get(...params) as { count: number };
+            
+            return result.count;
+        } catch (error) {
+            Logger.error('Failed to get context count:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get database statistics
+     */
+    async getStats(): Promise<{
+        totalContexts: number;
+        byType: Record<string, number>;
+        byProject: Record<string, number>;
+    }> {
+        try {
+            // Total contexts
+            const totalStmt = this.db.prepare('SELECT COUNT(*) as count FROM contexts');
+            const totalResult = totalStmt.get() as { count: number };
+            
+            // By type
+            const typeStmt = this.db.prepare('SELECT type, COUNT(*) as count FROM contexts GROUP BY type');
+            const typeResults = typeStmt.all() as { type: string; count: number }[];
+            const byType: Record<string, number> = {};
+            typeResults.forEach(row => {
+                byType[row.type] = row.count;
+            });
+            
+            // By project
+            const projectStmt = this.db.prepare('SELECT projectPath, COUNT(*) as count FROM contexts GROUP BY projectPath');
+            const projectResults = projectStmt.all() as { projectPath: string; count: number }[];
+            const byProject: Record<string, number> = {};
+            projectResults.forEach(row => {
+                byProject[row.projectPath] = row.count;
+            });
+            
+            return {
+                totalContexts: totalResult.count,
+                byType,
+                byProject
+            };
+        } catch (error) {
+            Logger.error('Failed to get database stats:', error);
+            throw error;
+        }
+    }
+
+    // ===== AGENT MANAGEMENT METHODS =====
+
+    async addAgent(agentData: Omit<DatabaseAgent, 'id'>): Promise<DatabaseAgent> {
+        const id = `agent_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        
+        try {
+            const stmt = this.db.prepare(`
+                INSERT INTO agents (id, name, description, emoji, specializations, color, enabled, isCustom, prompt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            
+            stmt.run(
+                id,
+                agentData.name,
+                agentData.description,
+                agentData.emoji || null,
+                JSON.stringify(agentData.specializations),
+                agentData.color || null,
+                agentData.enabled ? 1 : 0,
+                agentData.isCustom ? 1 : 0,
+                agentData.prompt || null
+            );
+            
+            Logger.info(`Agent added: ${id}`);
+            return { id, ...agentData };
+        } catch (error) {
+            Logger.error('Failed to add agent:', error);
+            throw error;
+        }
+    }
+
+    async getAllAgents(): Promise<DatabaseAgent[]> {
+        try {
+            const stmt = this.db.prepare('SELECT * FROM agents ORDER BY isCustom ASC, name ASC');
+            const rows = stmt.all() as AgentRow[];
+            
+            return rows.map(this.rowToAgent);
+        } catch (error) {
+            Logger.error('Failed to get agents:', error);
+            throw error;
+        }
+    }
+
+    async getAgentById(id: string): Promise<DatabaseAgent | undefined> {
+        try {
+            const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?');
+            const row = stmt.get(id) as AgentRow | undefined;
+            
+            return row ? this.rowToAgent(row) : undefined;
+        } catch (error) {
+            Logger.error('Failed to get agent by id:', error);
+            throw error;
+        }
+    }
+
+    async updateAgent(id: string, updates: Partial<Omit<DatabaseAgent, 'id'>>): Promise<void> {
+        try {
+            // Check if agent exists
+            const existing = await this.getAgentById(id);
+            if (!existing) {
+                throw new Error(`Agent with id ${id} not found`);
+            }
+
+            // Build dynamic update query
+            const fields: string[] = [];
+            const values: any[] = [];
+            
+            if (updates.name !== undefined) {
+                fields.push('name = ?');
+                values.push(updates.name);
+            }
+            if (updates.description !== undefined) {
+                fields.push('description = ?');
+                values.push(updates.description);
+            }
+            if (updates.emoji !== undefined) {
+                fields.push('emoji = ?');
+                values.push(updates.emoji || null);
+            }
+            if (updates.specializations !== undefined) {
+                fields.push('specializations = ?');
+                values.push(JSON.stringify(updates.specializations));
+            }
+            if (updates.color !== undefined) {
+                fields.push('color = ?');
+                values.push(updates.color || null);
+            }
+            if (updates.enabled !== undefined) {
+                fields.push('enabled = ?');
+                values.push(updates.enabled ? 1 : 0);
+            }
+            if (updates.isCustom !== undefined) {
+                fields.push('isCustom = ?');
+                values.push(updates.isCustom ? 1 : 0);
+            }
+            if (updates.prompt !== undefined) {
+                fields.push('prompt = ?');
+                values.push(updates.prompt || null);
+            }
+            
+            if (fields.length === 0) {
+                return; // Nothing to update
+            }
+            
+            values.push(id); // Add ID for WHERE clause
+            
+            const stmt = this.db.prepare(`
+                UPDATE agents 
+                SET ${fields.join(', ')} 
+                WHERE id = ?
+            `);
+            
+            stmt.run(...values);
+            Logger.info(`Agent updated: ${id}`);
+        } catch (error) {
+            Logger.error('Failed to update agent:', error);
+            throw error;
+        }
+    }
+
+    async deleteAgent(id: string): Promise<void> {
+        try {
+            // Check if it's a custom agent (don't allow deleting standard agents)
+            const agent = await this.getAgentById(id);
+            if (!agent) {
+                throw new Error(`Agent with id ${id} not found`);
+            }
+            if (!agent.isCustom) {
+                throw new Error(`Cannot delete standard agent: ${agent.name}`);
+            }
+
+            const stmt = this.db.prepare('DELETE FROM agents WHERE id = ?');
+            const result = stmt.run(id);
+            
+            if (result.changes === 0) {
+                throw new Error(`Agent with id ${id} not found`);
+            }
+            
+            Logger.info(`Agent deleted: ${id}`);
+        } catch (error) {
+            Logger.error('Failed to delete agent:', error);
+            throw error;
+        }
+    }
+
+    async populateStandardAgents(): Promise<void> {
+        try {
+            const standardAgents: Omit<DatabaseAgent, 'id'>[] = [
+                {
+                    name: 'Architect',
+                    description: 'System design and architecture decisions',
+                    emoji: '🏗️',
+                    specializations: ['System Design', 'Architecture Patterns', 'Scalability', 'Technical Decisions'],
+                    color: '#FF6B35',
+                    enabled: true,
+                    isCustom: false
+                },
+                {
+                    name: 'Backend',
+                    description: 'Server-side development and APIs',
+                    emoji: '⚙️',
+                    specializations: ['REST APIs', 'Database Design', 'Authentication', 'Performance'],
+                    color: '#4ECDC4',
+                    enabled: true,
+                    isCustom: false
+                },
+                {
+                    name: 'Frontend',
+                    description: 'User interface and experience',
+                    emoji: '🎨',
+                    specializations: ['React/Vue', 'UI/UX Design', 'Responsive Design', 'Accessibility'],
+                    color: '#45B7D1',
+                    enabled: true,
+                    isCustom: false
+                }
+            ];
+
+            for (const agentData of standardAgents) {
+                await this.addAgent(agentData);
+            }
+
+            Logger.info('Standard agents populated successfully');
+        } catch (error) {
+            Logger.error('Failed to populate standard agents:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Close database connection (for cleanup)
+     */
+    close(): void {
+        if (this.db) {
+            this.db.close();
+            Logger.info('SQLite database connection closed');
+        }
+    }
+
+    /**
+     * Convert database row to ContextEntry
+     */
+    private rowToContextEntry(row: ContextRow): ContextEntry {
+        return {
+            id: row.id,
+            projectPath: row.projectPath,
+            type: row.type as ContextEntry['type'],
+            content: row.content,
+            timestamp: new Date(row.timestamp),
+            importance: row.importance,
+            tags: JSON.parse(row.tags)
+        };
+    }
+
+    /**
+     * Convert database row to DatabaseAgent
+     */
+    private rowToAgent(row: AgentRow): DatabaseAgent {
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            emoji: row.emoji || undefined,
+            specializations: JSON.parse(row.specializations),
+            color: row.color || undefined,
+            enabled: Boolean(row.enabled),
+            isCustom: Boolean(row.isCustom),
+            prompt: row.prompt || undefined
+        };
+    }
+}

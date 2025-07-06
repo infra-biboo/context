@@ -1,19 +1,19 @@
-export type AgentType = 'architect' | 'backend' | 'frontend';
+export type AgentType = string; // Changed to be more flexible
 
 export interface Agent {
-    id: AgentType;
+    id: string; // Changed from AgentType to string for dynamic IDs
     name: string;
     description: string;
-    emoji: string;
+    emoji?: string; // Made optional
     enabled: boolean;
     specializations: string[];
-    color: string;
+    color?: string; // Made optional
+    isCustom: boolean; // Added to distinguish standard vs custom agents
+    prompt?: string; // Added for future extensibility
 }
 
 export interface AgentState {
-    architect: Agent;
-    backend: Agent;
-    frontend: Agent;
+    agents: Map<string, Agent>; // Changed to dynamic structure
     collaborationMode: 'individual' | 'collaborative' | 'hierarchical';
 }
 

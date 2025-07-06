@@ -3,6 +3,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { ContextDatabase } from '../core/database';
 import { AgentManager } from '../agents/agent-manager';
+import { ContextAnalysisService } from '../core/context-analysis-service';
+import { ResponseFormattingService } from './response-formatting-service';
 
 export class MCPServer {
     private server: McpServer;
@@ -10,7 +12,9 @@ export class MCPServer {
 
     constructor(
         private database: ContextDatabase,
-        private agentManager: AgentManager
+        private agentManager: AgentManager,
+        private analysisService: ContextAnalysisService = new ContextAnalysisService(),
+        private formattingService: ResponseFormattingService = new ResponseFormattingService()
     ) {
         this.server = new McpServer({
             name: 'claude-context-manager',
@@ -49,58 +53,72 @@ export class MCPServer {
                 return await this.handleGetActiveAgents();
             }
         );
+
+        // Activate agent context tool
+        this.server.registerTool(
+            'activate_agent_context',
+            {
+                title: 'Activate Agent Context',
+                description: 'Set active agent perspective for specialized responses',
+                inputSchema: {
+                    agent: z.enum(['architect', 'backend', 'frontend']).describe('Agent to activate'),
+                    task: z.string().describe('Specific task or context for the agent'),
+                    priority: z.enum(['primary', 'consulting']).optional().describe('Agent priority level (default: primary)')
+                }
+            },
+            async ({ agent, task, priority }) => {
+                return await this.handleActivateAgentContext({ agent, task, priority });
+            }
+        );
     }
 
     private async handleGetContext(args: any) {
         const limit = args.limit || 10;
         const type = args.type;
 
-        const contexts = await this.database.getContexts();
-        const filtered = type 
-            ? contexts.filter(c => c.type === type)
-            : contexts;
+        // 1. Get data from database
+        const contexts = await this.database.searchContexts('', {
+            type: type,
+            limit: limit
+        });
 
-        const limited = filtered.slice(0, limit);
+        // 2. Process with analysis service
+        const enrichedContexts = this.analysisService.enrichWithAgentSuggestions(contexts);
 
-        const contextSummary = limited.map(ctx => ({
-            type: ctx.type,
-            content: ctx.content,
-            timestamp: ctx.timestamp,
-            importance: ctx.importance,
-            tags: ctx.tags
-        }));
+        // 3. Format with formatting service
+        const formattedResponse = this.formattingService.formatContextResponse(enrichedContexts);
 
-        return {
-            content: [{
-                type: 'text' as const,
-                text: `Recent Context (${limited.length} entries):\n\n` +
-                      contextSummary.map(ctx => 
-                          `[${ctx.type.toUpperCase()}] ${ctx.content.substring(0, 200)}...\n` +
-                          `Tags: ${ctx.tags.join(', ')}\n` +
-                          `Importance: ${ctx.importance}/10\n`
-                      ).join('\n---\n')
-            }]
-        };
+        // 4. Return formatted response
+        return formattedResponse;
     }
 
-    private async handleGetActiveAgents() {
-        const activeAgents = this.agentManager.getActiveAgents();
-        const agentInfo = activeAgents.map(agent => ({
-            name: agent.name,
-            role: agent.description,
-            specializations: agent.specializations
-        }));
 
-        return {
-            content: [{
-                type: 'text' as const,
-                text: `Active AI Agents (${activeAgents.length}):\n\n` +
-                      agentInfo.map(agent => 
-                          `**${agent.name}**: ${agent.role}\n` +
-                          `Specializations: ${agent.specializations.join(', ')}\n`
-                      ).join('\n')
-            }]
-        };
+    private async handleGetActiveAgents() {
+        // 1. Get data from agent manager
+        const activeAgents = this.agentManager.getActiveAgents();
+        const agentStatus = this.agentManager.getAgentStatus();
+        
+        // 2. Format with formatting service
+        const formattedResponse = this.formattingService.formatActiveAgentsResponse(activeAgents, agentStatus);
+        
+        // 3. Return formatted response
+        return formattedResponse;
+    }
+
+    private async handleActivateAgentContext(args: any) {
+        const { agent, task, priority = 'primary' } = args;
+        
+        // 1. Get data from agent manager
+        const agentInfo = this.agentManager.getAgent(agent);
+        if (!agentInfo) {
+            throw new Error(`Agent '${agent}' not found or not active`);
+        }
+
+        // 2. Format with formatting service
+        const formattedResponse = this.formattingService.formatAgentActivationResponse(agentInfo, task, priority);
+        
+        // 3. Return formatted response
+        return formattedResponse;
     }
 
     async start(): Promise<void> {
@@ -113,12 +131,26 @@ export class MCPServer {
             console.log('MCP Server started successfully');
         } catch (error) {
             console.error('Failed to start MCP server:', error);
+            this.isRunning = false;
             throw error;
         }
     }
 
     isConnected(): boolean {
-        return this.isRunning;
+        return this.isRunning && this.server !== null;
+    }
+
+    getConnectionInfo(): { connected: boolean; status: string } {
+        if (!this.isRunning) {
+            return { connected: false, status: 'Server not started' };
+        }
+        
+        try {
+            // Additional health check could be added here
+            return { connected: true, status: 'Connected and ready' };
+        } catch (error) {
+            return { connected: false, status: `Connection error: ${error}` };
+        }
     }
 
     async stop(): Promise<void> {

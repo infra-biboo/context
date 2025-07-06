@@ -10,8 +10,13 @@ export class ContextManager {
     }
 
     async initialize(): Promise<void> {
-        await this.database.initialize();
+        // Database is now initialized in its constructor
         Logger.info('Context Manager initialized successfully');
+    }
+
+    async initializeWithDatabase(database: ContextDatabase): Promise<void> {
+        this.database = database;
+        Logger.info('Context Manager initialized with external database');
     }
 
     getDatabase(): ContextDatabase {

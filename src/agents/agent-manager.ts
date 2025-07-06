@@ -1,126 +1,238 @@
 import { Agent, AgentState, AgentType, AgentStatus } from './agent-types';
-import { ConfigStore } from '../core/config-store';
+import { ContextDatabase, DatabaseAgent } from '../core/database';
 import { Logger } from '../utils/logger';
 
 export class AgentManager {
-    private agents: AgentState;
+    private agents: Map<string, Agent> = new Map();
+    private collaborationMode: 'individual' | 'collaborative' | 'hierarchical' = 'collaborative';
     private listeners: Set<(status: AgentStatus) => void> = new Set();
+    private initialized = false;
 
-    constructor(private configStore: ConfigStore) {
-        this.agents = this.getDefaultAgents();
-        this.loadAgentState();
-        Logger.info('Agent Manager initialized');
+    constructor(private database: ContextDatabase) {
+        // Don't initialize synchronously - call initialize() method
+        Logger.info('Agent Manager created, call initialize() to load agents');
     }
 
-    private getDefaultAgents(): AgentState {
-        return {
-            architect: {
-                id: 'architect',
-                name: 'Architect',
-                description: 'System design and architecture decisions',
-                emoji: '🏗️',
-                enabled: true,
-                specializations: ['System Design', 'Architecture Patterns', 'Scalability', 'Technical Decisions'],
-                color: '#FF6B35'
-            },
-            backend: {
-                id: 'backend',
-                name: 'Backend',
-                description: 'Server-side development and APIs',
-                emoji: '⚙️',
-                enabled: true,
-                specializations: ['REST APIs', 'Database Design', 'Authentication', 'Performance'],
-                color: '#4ECDC4'
-            },
-            frontend: {
-                id: 'frontend',
-                name: 'Frontend',
-                description: 'User interface and experience',
-                emoji: '🎨',
-                enabled: true,
-                specializations: ['React/Vue', 'UI/UX Design', 'Responsive Design', 'Accessibility'],
-                color: '#45B7D1'
-            },
-            collaborationMode: 'collaborative'
-        };
-    }
+    async initialize(): Promise<void> {
+        if (this.initialized) {
+            return;
+        }
 
-    private async loadAgentState(): Promise<void> {
         try {
-            const config = this.configStore.getConfig();
-            // In future iterations, we'll load agent state from config
-            // For now, we'll use defaults
-            Logger.debug('Agent state loaded from configuration');
+            await this.loadAgentsFromDB();
+            this.initialized = true;
+            Logger.info('Agent Manager initialized successfully');
         } catch (error) {
-            Logger.error('Error loading agent state:', error as Error);
+            Logger.error('Failed to initialize Agent Manager:', error as Error);
+            throw error;
         }
     }
 
-    private async saveAgentState(): Promise<void> {
+    private async loadAgentsFromDB(): Promise<void> {
         try {
-            // In future iterations, we'll save to ConfigStore
-            // For now, just log the change
-            const activeAgents = this.getActiveAgents();
-            Logger.info(`Agent state updated: ${activeAgents.map(a => a.name).join(', ')} active`);
-            this.notifyListeners();
+            const dbAgents = await this.database.getAllAgents();
+            
+            // If no agents in DB, populate with standard agents
+            if (dbAgents.length === 0) {
+                Logger.info('No agents found in database, populating standard agents');
+                await this.database.populateStandardAgents();
+                // Reload after population
+                const newAgents = await this.database.getAllAgents();
+                this.populateAgentsMap(newAgents);
+            } else {
+                this.populateAgentsMap(dbAgents);
+            }
+            
+            Logger.info(`Loaded ${this.agents.size} agents from database`);
         } catch (error) {
-            Logger.error('Error saving agent state:', error as Error);
+            Logger.error('Error loading agents from database:', error as Error);
+            throw error;
         }
     }
+
+    private populateAgentsMap(dbAgents: DatabaseAgent[]): void {
+        this.agents.clear();
+        for (const dbAgent of dbAgents) {
+            const agent: Agent = {
+                id: dbAgent.id,
+                name: dbAgent.name,
+                description: dbAgent.description,
+                emoji: dbAgent.emoji,
+                enabled: dbAgent.enabled,
+                specializations: dbAgent.specializations,
+                color: dbAgent.color,
+                isCustom: dbAgent.isCustom,
+                prompt: dbAgent.prompt
+            };
+            this.agents.set(agent.id, agent);
+        }
+    }
+
+    private async notifyListeners(): Promise<void> {
+        const status = this.getAgentStatus();
+        this.listeners.forEach(listener => listener(status));
+    }
+
+    // ===== PUBLIC METHODS =====
 
     getActiveAgents(): Agent[] {
-        return Object.values(this.agents)
-            .filter(agent => typeof agent === 'object' && 'enabled' in agent && agent.enabled) as Agent[];
+        this.ensureInitialized();
+        return Array.from(this.agents.values()).filter(agent => agent.enabled);
     }
 
     getAllAgents(): Agent[] {
-        return Object.values(this.agents)
-            .filter(agent => typeof agent === 'object' && 'enabled' in agent) as Agent[];
+        this.ensureInitialized();
+        return Array.from(this.agents.values());
     }
 
-    getAgent(agentId: AgentType): Agent | undefined {
-        return this.agents[agentId];
+    getAgent(agentId: string): Agent | undefined {
+        this.ensureInitialized();
+        return this.agents.get(agentId);
     }
 
-    async toggleAgent(agentId: AgentType): Promise<boolean> {
-        if (this.agents[agentId] && 'enabled' in this.agents[agentId]) {
-            const agent = this.agents[agentId] as Agent;
-            agent.enabled = !agent.enabled;
-            await this.saveAgentState();
-            Logger.info(`Agent ${agentId} ${agent.enabled ? 'enabled' : 'disabled'}`);
-            return agent.enabled;
+    async toggleAgent(agentId: string): Promise<boolean> {
+        this.ensureInitialized();
+        
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            throw new Error(`Agent with id ${agentId} not found`);
         }
-        return false;
+
+        const newEnabledState = !agent.enabled;
+        
+        // Update in database
+        await this.database.updateAgent(agentId, { enabled: newEnabledState });
+        
+        // Update in memory
+        agent.enabled = newEnabledState;
+        
+        await this.notifyListeners();
+        Logger.info(`Agent ${agent.name} ${newEnabledState ? 'enabled' : 'disabled'}`);
+        return newEnabledState;
     }
 
     async setCollaborationMode(mode: 'individual' | 'collaborative' | 'hierarchical'): Promise<void> {
-        this.agents.collaborationMode = mode;
-        await this.saveAgentState();
+        this.collaborationMode = mode;
+        await this.notifyListeners();
         Logger.info(`Collaboration mode set to: ${mode}`);
     }
 
     getAgentState(): AgentState {
-        return { ...this.agents };
+        this.ensureInitialized();
+        return {
+            agents: new Map(this.agents),
+            collaborationMode: this.collaborationMode
+        };
     }
 
     getAgentStatus(): AgentStatus {
+        this.ensureInitialized();
         const activeAgents = this.getActiveAgents();
         return {
-            totalAgents: 3,
+            totalAgents: this.agents.size,
             activeAgents: activeAgents.length,
-            collaborationMode: this.agents.collaborationMode,
+            collaborationMode: this.collaborationMode,
             lastUpdated: new Date()
         };
+    }
+
+    // ===== CRUD METHODS FOR DYNAMIC AGENTS =====
+
+    async addAgent(agentData: Omit<Agent, 'id'>): Promise<Agent> {
+        this.ensureInitialized();
+        
+        const dbAgentData: Omit<DatabaseAgent, 'id'> = {
+            name: agentData.name,
+            description: agentData.description,
+            emoji: agentData.emoji,
+            specializations: agentData.specializations,
+            color: agentData.color,
+            enabled: agentData.enabled,
+            isCustom: agentData.isCustom,
+            prompt: agentData.prompt
+        };
+
+        const dbAgent = await this.database.addAgent(dbAgentData);
+        
+        const agent: Agent = {
+            id: dbAgent.id,
+            name: dbAgent.name,
+            description: dbAgent.description,
+            emoji: dbAgent.emoji,
+            enabled: dbAgent.enabled,
+            specializations: dbAgent.specializations,
+            color: dbAgent.color,
+            isCustom: dbAgent.isCustom,
+            prompt: dbAgent.prompt
+        };
+
+        this.agents.set(agent.id, agent);
+        await this.notifyListeners();
+        
+        Logger.info(`Agent added: ${agent.name}`);
+        return agent;
+    }
+
+    async updateAgent(agentId: string, updates: Partial<Omit<Agent, 'id'>>): Promise<void> {
+        this.ensureInitialized();
+        
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            throw new Error(`Agent with id ${agentId} not found`);
+        }
+
+        // Update in database
+        const dbUpdates: Partial<Omit<DatabaseAgent, 'id'>> = {
+            name: updates.name,
+            description: updates.description,
+            emoji: updates.emoji,
+            specializations: updates.specializations,
+            color: updates.color,
+            enabled: updates.enabled,
+            isCustom: updates.isCustom,
+            prompt: updates.prompt
+        };
+
+        await this.database.updateAgent(agentId, dbUpdates);
+
+        // Update in memory
+        Object.assign(agent, updates);
+        
+        await this.notifyListeners();
+        Logger.info(`Agent updated: ${agent.name}`);
+    }
+
+    async deleteAgent(agentId: string): Promise<void> {
+        this.ensureInitialized();
+        
+        const agent = this.agents.get(agentId);
+        if (!agent) {
+            throw new Error(`Agent with id ${agentId} not found`);
+        }
+
+        if (!agent.isCustom) {
+            throw new Error(`Cannot delete standard agent: ${agent.name}`);
+        }
+
+        // Delete from database
+        await this.database.deleteAgent(agentId);
+        
+        // Remove from memory
+        this.agents.delete(agentId);
+        
+        await this.notifyListeners();
+        Logger.info(`Agent deleted: ${agent.name}`);
+    }
+
+    private ensureInitialized(): void {
+        if (!this.initialized) {
+            throw new Error('AgentManager not initialized. Call initialize() first.');
+        }
     }
 
     subscribe(listener: (status: AgentStatus) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
-    }
-
-    private notifyListeners(): void {
-        const status = this.getAgentStatus();
-        this.listeners.forEach(listener => listener(status));
     }
 
     dispose(): void {

@@ -1,157 +1,357 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs/promises';
+import { DatabaseAdapter } from './database/database-adapter';
+import { DatabaseFactory } from './database/database-factory';
+import { DatabaseConfig, SearchOptions, VectorSearchOptions } from './database/types';
 import { Logger } from '../utils/logger';
 
-export interface ContextEntry {
-    id: string;
-    projectPath: string;
-    type: 'conversation' | 'decision' | 'code' | 'issue';
-    content: string;
-    timestamp: Date;
-    importance: number;
-    tags: string[];
-}
+// Re-export types for compatibility
+export { ContextEntry, DatabaseAgent } from './database/types';
+export { SearchOptions, VectorSearchOptions, DatabaseConfig } from './database/types';
 
 export class ContextDatabase {
-    private dbPath: string;
-    private contexts: Map<string, ContextEntry> = new Map();
+    private adapter: DatabaseAdapter;
+    private isInitialized: boolean = false;
+    private currentConfig: DatabaseConfig;
 
-    constructor(private extensionContext: vscode.ExtensionContext) {
-        this.dbPath = path.join(
-            extensionContext.globalStorageUri.fsPath, 
-            'contexts.json'
-        );
-        this.ensureStorageDir();
-    }
-
-    private async ensureStorageDir() {
-        await fs.mkdir(
-            this.extensionContext.globalStorageUri.fsPath, 
-            { recursive: true }
-        );
-    }
-
-    async initialize(): Promise<void> {
-        try {
-            const data = await fs.readFile(this.dbPath, 'utf-8');
-            const entries: ContextEntry[] = JSON.parse(data);
-            entries.forEach(entry => {
-                this.contexts.set(entry.id, {
-                    ...entry,
-                    timestamp: new Date(entry.timestamp)
-                });
-            });
-        } catch (error) {
-            // File doesn't exist, start with empty database
-            await this.save();
-        }
-    }
-
-    async addContext(entry: Omit<ContextEntry, 'id' | 'timestamp'>): Promise<string> {
-        const id = `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-        const contextEntry: ContextEntry = {
-            id,
-            timestamp: new Date(),
-            ...entry
-        };
+    constructor(
+        private extensionContext: vscode.ExtensionContext,
+        config?: DatabaseConfig
+    ) {
+        // Use provided config or create default SQLite configuration
+        const dbConfig = config || this.createDefaultConfig();
+        this.currentConfig = dbConfig;
         
-        this.contexts.set(id, contextEntry);
-        await this.save();
-        return id;
-    }
-
-    async getContexts(projectPath?: string): Promise<ContextEntry[]> {
-        const entries = Array.from(this.contexts.values());
-        if (projectPath) {
-            return entries.filter(e => e.projectPath === projectPath);
+        try {
+            this.adapter = DatabaseFactory.create(dbConfig);
+            Logger.info(`ContextDatabase created with adapter: ${dbConfig.type}`);
+        } catch (error) {
+            Logger.error('Failed to create database adapter:', error as Error);
+            // Fallback to default JSON
+            const fallbackConfig = this.createDefaultConfig();
+            this.currentConfig = fallbackConfig;
+            this.adapter = DatabaseFactory.create(fallbackConfig);
+            Logger.info('Using fallback JSON configuration');
         }
-        return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     }
 
-    async getContextById(id: string): Promise<ContextEntry | undefined> {
-        return this.contexts.get(id);
-    }
-
-    async updateContext(id: string, updates: Partial<Omit<ContextEntry, 'id' | 'timestamp'>>): Promise<void> {
-        const existing = this.contexts.get(id);
-        if (!existing) {
-            throw new Error(`Context with id ${id} not found`);
+    /**
+     * Initialize the database connection and schema
+     */
+    async initialize(): Promise<void> {
+        if (this.isInitialized) {
+            return;
         }
 
-        const updated: ContextEntry = {
-            ...existing,
-            ...updates,
-            id: existing.id, // Preserve ID
-            timestamp: existing.timestamp // Preserve original timestamp
-        };
+        try {
+            await this.ensureStorageDir();
+            await this.adapter.connect();
+            this.isInitialized = true;
+            Logger.info('ContextDatabase initialized successfully');
+        } catch (error) {
+            Logger.error('Failed to initialize ContextDatabase:', error as Error);
+            throw error;
+        }
+    }
 
-        this.contexts.set(id, updated);
-        await this.save();
+    /**
+     * Initialize with existing database (for backward compatibility)
+     */
+    async initializeWithDatabase(legacyDatabase: any): Promise<void> {
+        Logger.warn('initializeWithDatabase is deprecated, use initialize() instead');
+        await this.initialize();
+    }
+
+    /**
+     * Check if database is connected and healthy
+     */
+    async isHealthy(): Promise<boolean> {
+        if (!this.isInitialized) {
+            return false;
+        }
+        
+        return await this.adapter.healthCheck();
+    }
+
+    /**
+     * Get database adapter instance (for advanced usage)
+     */
+    getAdapter(): DatabaseAdapter {
+        return this.adapter;
+    }
+
+    /**
+     * Get underlying database instance (for backward compatibility)
+     */
+    getDatabase(): DatabaseAdapter {
+        Logger.warn('getDatabase() is deprecated, use getAdapter() instead');
+        return this.adapter;
+    }
+
+    /**
+     * Get current database configuration
+     */
+    getDatabaseConfig(): DatabaseConfig {
+        return this.currentConfig;
+    }
+
+    // === Context Operations ===
+
+    async addContext(entry: Omit<import('./database/types').ContextEntry, 'id' | 'timestamp'>): Promise<string> {
+        this.ensureInitialized();
+        return await this.adapter.addContext(entry);
+    }
+
+    async getContexts(projectPath?: string): Promise<import('./database/types').ContextEntry[]> {
+        this.ensureInitialized();
+        const options: SearchOptions = projectPath ? { projectPath } : {};
+        return await this.adapter.getContexts(options);
+    }
+
+    async getContextById(id: string): Promise<import('./database/types').ContextEntry | undefined> {
+        this.ensureInitialized();
+        return await this.adapter.getContextById(id);
+    }
+
+    async updateContext(id: string, updates: Partial<Omit<import('./database/types').ContextEntry, 'id' | 'timestamp'>>): Promise<void> {
+        this.ensureInitialized();
+        return await this.adapter.updateContext(id, updates);
     }
 
     async deleteContext(id: string): Promise<void> {
-        if (!this.contexts.has(id)) {
-            throw new Error(`Context with id ${id} not found`);
+        this.ensureInitialized();
+        return await this.adapter.deleteContext(id);
+    }
+
+    async searchContexts(query: string, options: SearchOptions = {}): Promise<import('./database/types').ContextEntry[]> {
+        this.ensureInitialized();
+        return await this.adapter.searchContexts(query, options);
+    }
+
+    /**
+     * Search for similar contexts using vector embeddings (if supported)
+     */
+    async searchSimilar(embedding: number[], options?: VectorSearchOptions): Promise<import('./database/types').ContextEntry[]> {
+        this.ensureInitialized();
+        
+        if (!this.adapter.searchSimilar) {
+            throw new Error('Vector search not supported by current database adapter');
         }
         
-        this.contexts.delete(id);
-        await this.save();
-        Logger.info(`Context deleted: ${id}`);
+        return await this.adapter.searchSimilar(embedding, options);
     }
 
-    async searchContexts(query: string, options: {
-        type?: string;
-        projectPath?: string;
-        tags?: string[];
-        importance?: number;
-        limit?: number;
-    } = {}): Promise<ContextEntry[]> {
-        let results = Array.from(this.contexts.values());
-
-        // Filter by project path
-        if (options.projectPath) {
-            results = results.filter(ctx => ctx.projectPath === options.projectPath);
-        }
-
-        // Filter by type
-        if (options.type && options.type !== 'all') {
-            results = results.filter(ctx => ctx.type === options.type);
-        }
-
-        // Filter by minimum importance
-        if (options.importance !== undefined) {
-            results = results.filter(ctx => ctx.importance >= options.importance!);
-        }
-
-        // Filter by tags
-        if (options.tags && options.tags.length > 0) {
-            results = results.filter(ctx => 
-                options.tags!.some(tag => ctx.tags.includes(tag))
-            );
-        }
-
-        // Text search
-        if (query && query.trim()) {
-            const searchTerm = query.toLowerCase().trim();
-            results = results.filter(ctx => 
-                ctx.content.toLowerCase().includes(searchTerm) ||
-                ctx.tags.some(tag => tag.toLowerCase().includes(searchTerm))
-            );
-        }
-
-        // Sort by relevance (importance + timestamp)
-        results.sort((a, b) => {
-            const scoreA = a.importance + (new Date(a.timestamp).getTime() / 1000000000);
-            const scoreB = b.importance + (new Date(b.timestamp).getTime() / 1000000000);
-            return scoreB - scoreA;
-        });
-
-        return results.slice(0, options.limit || 100);
+    async getContextCount(options: SearchOptions = {}): Promise<number> {
+        this.ensureInitialized();
+        return await this.adapter.getContextCount(options);
     }
 
-    private async save(): Promise<void> {
-        const entries = Array.from(this.contexts.values());
-        await fs.writeFile(this.dbPath, JSON.stringify(entries, null, 2));
+    // === Agent Operations ===
+
+    async addAgent(agentData: Omit<import('./database/types').DatabaseAgent, 'id'>): Promise<import('./database/types').DatabaseAgent> {
+        this.ensureInitialized();
+        return await this.adapter.addAgent(agentData);
+    }
+
+    async getAllAgents(): Promise<import('./database/types').DatabaseAgent[]> {
+        this.ensureInitialized();
+        return await this.adapter.getAllAgents();
+    }
+
+    async getAgentById(id: string): Promise<import('./database/types').DatabaseAgent | undefined> {
+        this.ensureInitialized();
+        return await this.adapter.getAgentById(id);
+    }
+
+    async updateAgent(id: string, updates: Partial<Omit<import('./database/types').DatabaseAgent, 'id'>>): Promise<void> {
+        this.ensureInitialized();
+        return await this.adapter.updateAgent(id, updates);
+    }
+
+    async deleteAgent(id: string): Promise<void> {
+        this.ensureInitialized();
+        return await this.adapter.deleteAgent(id);
+    }
+
+    async populateStandardAgents(): Promise<void> {
+        this.ensureInitialized();
+        
+        try {
+            const standardAgents: Omit<import('./database/types').DatabaseAgent, 'id'>[] = [
+                {
+                    name: 'Architect',
+                    description: 'System design and architecture decisions',
+                    emoji: '🏗️',
+                    specializations: ['System Design', 'Architecture Patterns', 'Scalability', 'Technical Decisions'],
+                    color: '#FF6B35',
+                    enabled: true,
+                    isCustom: false
+                },
+                {
+                    name: 'Backend',
+                    description: 'Server-side development and APIs',
+                    emoji: '⚙️',
+                    specializations: ['REST APIs', 'Database Design', 'Authentication', 'Performance'],
+                    color: '#4ECDC4',
+                    enabled: true,
+                    isCustom: false
+                },
+                {
+                    name: 'Frontend',
+                    description: 'User interface and experience',
+                    emoji: '🎨',
+                    specializations: ['React/Vue', 'UI/UX Design', 'Responsive Design', 'Accessibility'],
+                    color: '#45B7D1',
+                    enabled: true,
+                    isCustom: false
+                }
+            ];
+
+            for (const agentData of standardAgents) {
+                try {
+                    await this.addAgent(agentData);
+                } catch (error) {
+                    // Agent might already exist, which is okay
+                    Logger.info(`Agent '${agentData.name}' might already exist: ${error}`);
+                }
+            }
+
+            Logger.info('Standard agents populated successfully');
+        } catch (error) {
+            Logger.error('Failed to populate standard agents:', error as Error);
+            throw error;
+        }
+    }
+
+    // === Utility Operations ===
+
+    async getStats(): Promise<import('./database/types').DatabaseStats> {
+        this.ensureInitialized();
+        return await this.adapter.getStats();
+    }
+
+    /**
+     * Export all data (if supported by adapter)
+     */
+    async exportData(): Promise<any> {
+        this.ensureInitialized();
+        
+        if (!this.adapter.exportData) {
+            throw new Error('Data export not supported by current database adapter');
+        }
+        
+        return await this.adapter.exportData();
+    }
+
+    /**
+     * Import data (if supported by adapter)
+     */
+    async importData(data: any): Promise<void> {
+        this.ensureInitialized();
+        
+        if (!this.adapter.importData) {
+            throw new Error('Data import not supported by current database adapter');
+        }
+        
+        return await this.adapter.importData(data);
+    }
+
+    /**
+     * Sync with another adapter (for hybrid setups)
+     */
+    async syncWith(otherAdapter: DatabaseAdapter): Promise<import('./database/types').SyncResult> {
+        this.ensureInitialized();
+        
+        if (!this.adapter.syncWith) {
+            throw new Error('Sync not supported by current database adapter');
+        }
+        
+        return await this.adapter.syncWith(otherAdapter);
+    }
+
+    /**
+     * Close database connection
+     */
+    async close(): Promise<void> {
+        if (this.isInitialized) {
+            await this.adapter.disconnect();
+            this.isInitialized = false;
+            Logger.info('ContextDatabase connection closed');
+        }
+    }
+
+    // === Private Methods ===
+
+    private createDefaultConfig(): DatabaseConfig {
+        const dbPath = path.join(
+            this.extensionContext.globalStorageUri.fsPath,
+            'context.json'
+        );
+
+        return {
+            type: 'json',
+            json: { path: dbPath, maxContexts: 1000 }
+        };
+    }
+
+    private async ensureStorageDir(): Promise<void> {
+        const fs = await import('fs/promises');
+        try {
+            await fs.mkdir(
+                this.extensionContext.globalStorageUri.fsPath,
+                { recursive: true }
+            );
+        } catch (error) {
+            Logger.error('Failed to create storage directory:', error as Error);
+            throw error;
+        }
+    }
+
+    private ensureInitialized(): void {
+        if (!this.isInitialized) {
+            throw new Error('Database not initialized. Call initialize() first.');
+        }
+    }
+
+    // === Static Factory Methods ===
+
+    /**
+     * Create ContextDatabase with specific configuration
+     */
+    static create(extensionContext: vscode.ExtensionContext, config: DatabaseConfig): ContextDatabase {
+        return new ContextDatabase(extensionContext, config);
+    }
+
+    /**
+     * Create ContextDatabase from environment variables
+     */
+    static createFromEnvironment(extensionContext: vscode.ExtensionContext): ContextDatabase {
+        try {
+            const config = DatabaseFactory.getConfigFromEnvironment();
+            return new ContextDatabase(extensionContext, config);
+        } catch (error) {
+            Logger.warn('Failed to create from environment, using default config:', error as Error);
+            return new ContextDatabase(extensionContext);
+        }
+    }
+
+    /**
+     * Create ContextDatabase with recommended configuration for scenario
+     */
+    static createForScenario(
+        extensionContext: vscode.ExtensionContext, 
+        scenario: 'development' | 'production' | 'team'
+    ): ContextDatabase {
+        const config = DatabaseFactory.getRecommendedConfig(scenario);
+        
+        // Adjust path for VS Code extension context
+        if (config.type === 'json' && config.json) {
+            config.json.path = path.join(
+                extensionContext.globalStorageUri.fsPath,
+                `${scenario}-context.json`
+            );
+        }
+        
+        return new ContextDatabase(extensionContext, config);
     }
 }

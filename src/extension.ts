@@ -3,8 +3,9 @@ import { registerCommands } from './commands/test-command';
 import { registerPanelCommands } from './commands/panel-commands';
 import { registerGitTestCommands } from './commands/git-test-commands';
 import { registerMCPCommands } from './commands/mcp-commands';
-import { ModularWebviewProvider } from './ui/webview-provider';
+import { ContextWebviewProvider } from './ui/webview-provider';
 import { ContextManager } from './core/context-manager';
+import { ContextDatabase } from './core/database';
 import { ConfigStore } from './core/config-store';
 import { AutoCapture } from './capture/auto-capture';
 import { AgentManager } from './agents/agent-manager';
@@ -16,9 +17,23 @@ export async function activate(context: vscode.ExtensionContext) {
     Logger.initialize();
     Logger.info('Claude Context Manager activating...');
     
-    // Initialize core components
+    // Initialize database with new adapter architecture
+    const database = new ContextDatabase(context);
+    
+    try {
+        await database.initialize();
+        Logger.info('Database initialized successfully');
+    } catch (error) {
+        Logger.error('Database initialization failed:', error as Error);
+        vscode.window.showErrorMessage(
+            'Failed to initialize database. Some features may be unavailable.'
+        );
+        return;
+    }
+    
+    // Initialize core components with new database
     const contextManager = new ContextManager(context);
-    await contextManager.initialize();
+    await contextManager.initializeWithDatabase(database);
     
     const configStore = ConfigStore.getInstance(context);
     Logger.info(`Configuration loaded: ${JSON.stringify(configStore.getConfig().capture)}`);
@@ -28,16 +43,25 @@ export async function activate(context: vscode.ExtensionContext) {
     await autoCapture.initialize();
     
     // Initialize agent manager
-    const agentManager = new AgentManager(configStore);
+    const agentManager = new AgentManager(database);
+    await agentManager.initialize();
     
-    // Initialize MCP server (optional - only if needed for external connections)
-    const mcpServer = new MCPServer(contextManager.getDatabase(), agentManager);
+    // Initialize MCP server with shared database (unified data source)
+    const mcpServer = new MCPServer(database, agentManager);
     const mcpConfigGenerator = new MCPConfigGenerator(context.extensionPath);
     
+    // Start MCP server
+    try {
+        await mcpServer.start();
+        Logger.info('MCP Server started successfully');
+    } catch (error) {
+        Logger.error('Failed to start MCP Server:', error instanceof Error ? error : new Error(String(error)));
+    }
+    
     // Register webview provider
-    const webviewProvider = new ModularWebviewProvider(
+    const webviewProvider = new ContextWebviewProvider(
         context.extensionUri,
-        contextManager.getDatabase(),
+        database,
         configStore,
         autoCapture,
         agentManager,
@@ -47,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
-            ModularWebviewProvider.viewType,
+            ContextWebviewProvider.viewType,
             webviewProvider
         )
     );
@@ -58,11 +82,14 @@ export async function activate(context: vscode.ExtensionContext) {
     registerGitTestCommands(context);
     registerMCPCommands(context);
     
-    // Add auto-capture, agent manager, and MCP server to disposables
+    // Add auto-capture, agent manager, database, and MCP server to disposables
     context.subscriptions.push(autoCapture);
     context.subscriptions.push(agentManager);
     context.subscriptions.push({
-        dispose: () => mcpServer.stop()
+        dispose: async () => {
+            mcpServer.stop();
+            await database.close();
+        }
     });
     
     Logger.info('Claude Context Manager activated successfully');

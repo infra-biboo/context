@@ -1,26 +1,55 @@
-import * as vscode from 'vscode';
+// Dynamic import to handle environments without vscode
+let vscode: any;
+try {
+    vscode = require('vscode');
+} catch (e) {
+    // Not in VS Code environment
+    vscode = null;
+}
 
 export class Logger {
-    private static outputChannel: vscode.OutputChannel;
+    private static outputChannel: any;
 
     static initialize() {
-        this.outputChannel = vscode.window.createOutputChannel('Claude Context Manager');
+        if (vscode) {
+            this.outputChannel = vscode.window.createOutputChannel('Claude Context Manager');
+        }
     }
 
     static info(message: string) {
         const timestamp = new Date().toISOString();
         const logMessage = `[${timestamp}] INFO: ${message}`;
         console.log(logMessage);
-        this.outputChannel?.appendLine(logMessage);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(logMessage);
+        }
     }
 
-    static error(message: string, error?: Error) {
+    static error(message: string, error?: unknown) {
         const timestamp = new Date().toISOString();
         const logMessage = `[${timestamp}] ERROR: ${message}`;
         console.error(logMessage, error);
-        this.outputChannel?.appendLine(logMessage);
-        if (error) {
-            this.outputChannel?.appendLine(`Stack: ${error.stack}`);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(logMessage);
+            if (error instanceof Error) {
+                this.outputChannel.appendLine(`Stack: ${error.stack}`);
+            } else if (error) {
+                this.outputChannel.appendLine(`Error details: ${String(error)}`);
+            }
+        }
+    }
+
+    static warn(message: string, error?: unknown) {
+        const timestamp = new Date().toISOString();
+        const logMessage = `[${timestamp}] WARN: ${message}`;
+        console.warn(logMessage, error);
+        if (this.outputChannel) {
+            this.outputChannel.appendLine(logMessage);
+            if (error instanceof Error) {
+                this.outputChannel.appendLine(`Stack: ${error.stack}`);
+            } else if (error) {
+                this.outputChannel.appendLine(`Warning details: ${String(error)}`);
+            }
         }
     }
 
