@@ -100,8 +100,15 @@ export class GitMonitor {
                     const tags = this.extractCommitTags(meaningfulMessage);
                     let content = `Git commit: ${meaningfulMessage}`;
 
+                    // Debug logging
+                    Logger.info(`Commit analysis: "${meaningfulMessage}"`);
+                    Logger.info(`Calculated importance: ${importance}`);
+                    Logger.info(`MCPClient available: ${!!this.mcpClient}`);
+                    const shouldEnrich = MCPClient.shouldEnrichContext(importance, meaningfulMessage);
+                    Logger.info(`Should enrich: ${shouldEnrich}`);
+
                     // Check if we should enrich this commit
-                    if (this.mcpClient && MCPClient.shouldEnrichContext(importance, meaningfulMessage)) {
+                    if (this.mcpClient && shouldEnrich) {
                         try {
                             Logger.info(`Enriching commit context with Claude: ${meaningfulMessage}`);
                             const enrichedContent = await this.mcpClient.enrichCommitContext(meaningfulMessage, importance);
