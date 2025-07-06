@@ -1,14 +1,14 @@
 import { Agent, AgentState, AgentType, AgentStatus } from './agent-types';
 import { ContextDatabase, DatabaseAgent } from '../core/database';
 import { Logger } from '../utils/logger';
+import { ConfigStore } from '../core/config-store';
 
 export class AgentManager {
     private agents: Map<string, Agent> = new Map();
-    private collaborationMode: 'individual' | 'collaborative' | 'hierarchical' = 'collaborative';
     private listeners: Set<(status: AgentStatus) => void> = new Set();
     private initialized = false;
 
-    constructor(private database: ContextDatabase) {
+    constructor(private database: ContextDatabase, private configStore: ConfigStore) {
         // Don't initialize synchronously - call initialize() method
         Logger.info('Agent Manager created, call initialize() to load agents');
     }
@@ -93,9 +93,15 @@ export class AgentManager {
     async toggleAgent(agentId: string): Promise<boolean> {
         this.ensureInitialized();
         
-        const agent = this.agents.get(agentId);
+        let agent = this.agents.get(agentId);
         if (!agent) {
-            throw new Error(`Agent with id ${agentId} not found`);
+            Logger.warn(`Agent with id ${agentId} not found. Available agents: ${Array.from(this.agents.keys()).join(', ')}`);
+            // Try to reload agents from database in case they were added recently
+            await this.loadAgentsFromDB();
+            agent = this.agents.get(agentId);
+            if (!agent) {
+                throw new Error(`Agent with id ${agentId} not found`);
+            }
         }
 
         const newEnabledState = !agent.enabled;
@@ -112,7 +118,7 @@ export class AgentManager {
     }
 
     async setCollaborationMode(mode: 'individual' | 'collaborative' | 'hierarchical'): Promise<void> {
-        this.collaborationMode = mode;
+        await this.configStore.updateConfig({ collaborationMode: mode });
         await this.notifyListeners();
         Logger.info(`Collaboration mode set to: ${mode}`);
     }
@@ -121,7 +127,7 @@ export class AgentManager {
         this.ensureInitialized();
         return {
             agents: new Map(this.agents),
-            collaborationMode: this.collaborationMode
+            collaborationMode: this.configStore.getConfig().collaborationMode
         };
     }
 
@@ -131,7 +137,7 @@ export class AgentManager {
         return {
             totalAgents: this.agents.size,
             activeAgents: activeAgents.length,
-            collaborationMode: this.collaborationMode,
+            collaborationMode: this.configStore.getConfig().collaborationMode,
             lastUpdated: new Date()
         };
     }

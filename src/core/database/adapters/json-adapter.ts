@@ -195,6 +195,20 @@ export class JSONAdapter extends BaseDatabaseAdapter {
     return newAgent;
   }
 
+  async addAgentWithId(agent: DatabaseAgent): Promise<DatabaseAgent> {
+    // Check if agent with this ID already exists
+    const existingIndex = this.data.agents.findIndex(a => a.id === agent.id);
+    if (existingIndex !== -1) {
+      throw new Error(`Agent with id ${agent.id} already exists`);
+    }
+    
+    this.data.agents.push(agent);
+    await this.scheduleSave();
+    
+    Logger.info(`Agent added with predefined ID: ${agent.id}`);
+    return agent;
+  }
+
   async getAllAgents(): Promise<DatabaseAgent[]> {
     return [...this.data.agents].sort((a, b) => {
       // Standard agents first, then custom

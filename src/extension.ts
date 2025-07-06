@@ -12,6 +12,8 @@ import { AgentManager } from './agents/agent-manager';
 import { MCPServer } from './mcp/server';
 import { MCPConfigGenerator } from './mcp/config-generator';
 import { Logger } from './utils/logger';
+import { SimpleTokenMonitor } from './core/simple-token-monitor';
+import { registerTokenCommands } from './commands/token-commands';
 
 export async function activate(context: vscode.ExtensionContext) {
     Logger.initialize();
@@ -43,8 +45,11 @@ export async function activate(context: vscode.ExtensionContext) {
     await autoCapture.initialize();
     
     // Initialize agent manager
-    const agentManager = new AgentManager(database);
+    const agentManager = new AgentManager(database, configStore);
     await agentManager.initialize();
+    
+    // Initialize simple token monitor
+    const tokenMonitor = new SimpleTokenMonitor();
     
     // Initialize MCP server with shared database (unified data source)
     const mcpServer = new MCPServer(database, agentManager);
@@ -66,7 +71,8 @@ export async function activate(context: vscode.ExtensionContext) {
         autoCapture,
         agentManager,
         mcpServer,
-        mcpConfigGenerator
+        mcpConfigGenerator,
+        tokenMonitor
     );
     
     context.subscriptions.push(
@@ -81,14 +87,16 @@ export async function activate(context: vscode.ExtensionContext) {
     registerPanelCommands(context);
     registerGitTestCommands(context);
     registerMCPCommands(context);
+    registerTokenCommands(context, tokenMonitor);
     
-    // Add auto-capture, agent manager, database, and MCP server to disposables
+    // Add auto-capture, agent manager, database, token monitor, and MCP server to disposables
     context.subscriptions.push(autoCapture);
     context.subscriptions.push(agentManager);
     context.subscriptions.push({
         dispose: async () => {
             mcpServer.stop();
             await database.close();
+            tokenMonitor.removeAllListeners();
         }
     });
     

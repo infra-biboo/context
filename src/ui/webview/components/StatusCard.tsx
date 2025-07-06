@@ -1,9 +1,9 @@
-import { Component } from 'solid-js';
+import { Component, JSX } from 'solid-js';
 
 interface StatusCardProps {
   title: string;
   value: string | number;
-  icon?: string;
+  icon?: string | JSX.Element;
   className?: string;
 }
 

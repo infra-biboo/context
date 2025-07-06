@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { CheckCircle, XCircle, AlertCircle, Circle } from 'lucide-solid';
 import { DatabaseConfig, DatabaseStats } from '../../../../core/database/types';
 
 interface ConfigStatusCardProps {
@@ -10,10 +11,10 @@ interface ConfigStatusCardProps {
 const ConfigStatusCard: Component<ConfigStatusCardProps> = (props) => {
   const getStatusIcon = () => {
     switch (props.connectionStatus) {
-      case 'connected': return '🟢';
-      case 'disconnected': return '🔴';
-      case 'connecting': return '🟡';
-      default: return '⚪';
+      case 'connected': return <CheckCircle size={16} color="#4CAF50" />;
+      case 'disconnected': return <XCircle size={16} color="#f44336" />;
+      case 'connecting': return <AlertCircle size={16} color="#ffeb3b" />;
+      default: return <Circle size={16} color="#9e9e9e" />;
     }
   };
 

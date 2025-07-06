@@ -177,8 +177,9 @@ export class ContextDatabase {
         this.ensureInitialized();
         
         try {
-            const standardAgents: Omit<import('./database/types').DatabaseAgent, 'id'>[] = [
+            const standardAgents: import('./database/types').DatabaseAgent[] = [
                 {
+                    id: 'architect',
                     name: 'Architect',
                     description: 'System design and architecture decisions',
                     emoji: '🏗️',
@@ -188,6 +189,7 @@ export class ContextDatabase {
                     isCustom: false
                 },
                 {
+                    id: 'backend',
                     name: 'Backend',
                     description: 'Server-side development and APIs',
                     emoji: '⚙️',
@@ -197,6 +199,7 @@ export class ContextDatabase {
                     isCustom: false
                 },
                 {
+                    id: 'frontend',
                     name: 'Frontend',
                     description: 'User interface and experience',
                     emoji: '🎨',
@@ -209,10 +212,17 @@ export class ContextDatabase {
 
             for (const agentData of standardAgents) {
                 try {
-                    await this.addAgent(agentData);
+                    // Check if agent already exists
+                    const existing = await this.getAgentById(agentData.id);
+                    if (!existing) {
+                        // Use adapter directly to insert with predefined ID
+                        await this.adapter.addAgentWithId(agentData);
+                        Logger.info(`Standard agent '${agentData.name}' added with ID: ${agentData.id}`);
+                    } else {
+                        Logger.info(`Standard agent '${agentData.name}' already exists`);
+                    }
                 } catch (error) {
-                    // Agent might already exist, which is okay
-                    Logger.info(`Agent '${agentData.name}' might already exist: ${error}`);
+                    Logger.error(`Error adding standard agent '${agentData.name}': ${error}`);
                 }
             }
 

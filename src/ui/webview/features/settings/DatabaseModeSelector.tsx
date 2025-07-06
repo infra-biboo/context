@@ -1,4 +1,5 @@
 import { Component } from 'solid-js';
+import { FileText, Database } from 'lucide-solid';
 
 interface DatabaseModeSelectorProps {
   currentMode: 'json' | 'postgresql' | 'hybrid';
@@ -18,7 +19,7 @@ const DatabaseModeSelector: Component<DatabaseModeSelectorProps> = (props) => {
         />
         <div class="mode-info">
           <div class="mode-header">
-            <span class="mode-icon">📝</span>
+            <span class="mode-icon"><FileText size={24} /></span>
             <strong>Developer Mode (JSON)</strong>
           </div>
           <p class="mode-description">
@@ -42,7 +43,7 @@ const DatabaseModeSelector: Component<DatabaseModeSelectorProps> = (props) => {
         />
         <div class="mode-info">
           <div class="mode-header">
-            <span class="mode-icon">🐘</span>
+            <span class="mode-icon"><Database size={24} /></span>
             <strong>Team/Advanced Mode (PostgreSQL)</strong>
           </div>
           <p class="mode-description">

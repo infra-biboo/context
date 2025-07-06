@@ -6,16 +6,12 @@ import { AgentManager } from '../agents/agent-manager';
 import { MCPServer } from '../mcp/server';
 import { MCPConfigGenerator } from '../mcp/config-generator';
 import { Logger } from '../utils/logger';
-import { ActionDispatcher } from './actions/dispatcher';
-import { ContextViewActions } from './actions/context-view-actions';
-import { AgentViewActions } from './actions/agent-view-actions';
-import { ConfigViewActions } from './actions/config-view-actions';
-import { McpViewActions } from './actions/mcp-view-actions';
+import { SimpleTokenMonitor } from '../core/simple-token-monitor';
+import { WebviewRequest, WebviewResponse } from './webview/core/types';
 
 export class ContextWebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'claude-context.panel';
     private webviewView?: vscode.WebviewView;
-    private dispatcher: ActionDispatcher;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -24,15 +20,11 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
         private readonly autoCapture: AutoCapture,
         private readonly agentManager: AgentManager,
         private readonly mcpServer: MCPServer,
-        private readonly mcpConfigGenerator: MCPConfigGenerator
+        private readonly mcpConfigGenerator: MCPConfigGenerator,
+        private readonly tokenMonitor: SimpleTokenMonitor
     ) {
-        // Initialize action dispatcher with action handlers
-        const contextActions = new ContextViewActions(this.database);
-        const agentActions = new AgentViewActions(this.agentManager);
-        const configActions = new ConfigViewActions(this.configStore, this.autoCapture);
-        const mcpActions = new McpViewActions(this.mcpServer, this.mcpConfigGenerator);
-        
-        this.dispatcher = new ActionDispatcher(contextActions, agentActions, configActions, mcpActions);
+        // Set up token monitor listeners
+        this.setupTokenMonitorListeners();
     }
 
     public resolveWebviewView(
@@ -50,7 +42,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
         webviewView.webview.onDidReceiveMessage(
-            (data) => this.handleMessage(data, webviewView)
+            (data) => this.handleMessage(data)
         );
     }
 
@@ -76,174 +68,164 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
             </html>`;
     }
 
-    private async handleMessage(data: any, _webviewView: vscode.WebviewView) {
+    private async handleMessage(request: WebviewRequest) {
+        const { command, payload, requestId } = request;
+        let responsePayload: any;
+        let error: string | undefined;
+
         try {
-            const result = await this.dispatcher.dispatch(data.type, data);
+            // Dispatch based on the command's domain and action
+            const [domain, action] = command.split('.');
             
-            // Handle different response types and send appropriate messages to webview
-            switch (data.type) {
-                case 'request-initial-data':
-                    // Send all initial data
-                    const contexts = await this.dispatcher.dispatch('getContexts', {});
-                    const agents = await this.dispatcher.dispatch('getAgents', {});
-                    const config = await this.dispatcher.dispatch('getConfig', {});
-                    const mcpStatus = await this.dispatcher.dispatch('getMCPStatus', {});
-                    
-                    // Get database configuration directly from the database
-                    const databaseConfig = this.database.getDatabaseConfig();
-                    
-                    this.postMessageToWebview({ type: 'contexts-updated', contexts });
-                    this.postMessageToWebview({ type: 'agents-updated', agents: agents.agents, status: agents.status });
-                    this.postMessageToWebview({ type: 'stats-updated', stats: { totalContexts: contexts.length, byType: {}, byProject: {}, adapterType: databaseConfig.type } });
-                    this.postMessageToWebview({ type: 'connection-status', status: 'connected' });
-                    this.postMessageToWebview({ 
-                        type: 'database-config-updated', 
-                        config: databaseConfig
-                    });
+            // Note: This is a simplified dispatcher. A more robust implementation
+            // might use a map of handlers for each domain.
+            switch (domain) {
+                case 'context':
+                    responsePayload = await this.handleContextActions(action, payload);
                     break;
-                
-                case 'update-database-config':
-                    // Handle database configuration update
-                    this.postMessageToWebview({ type: 'database-config-updated', config: data.config });
-                    vscode.window.showInformationMessage('Database configuration updated successfully');
+                case 'agent':
+                    responsePayload = await this.handleAgentActions(action, payload);
                     break;
-                
-                case 'test-database-connection':
-                    // Test database connection
-                    this.postMessageToWebview({ type: 'connection-status', status: 'connected' });
-                    vscode.window.showInformationMessage('Database connection test successful');
+                case 'config':
+                    responsePayload = await this.handleConfigActions(action, payload);
                     break;
-                
-                case 'search-contexts':
-                    this.postMessageToWebview({ type: 'search-results', results: result, query: data.query });
+                case 'mcp':
+                    responsePayload = await this.handleMcpActions(action, payload);
                     break;
-                
-                case 'delete-context':
-                    // Refresh contexts after deletion
-                    const updatedContexts = await this.dispatcher.dispatch('getContexts', {});
-                    this.postMessageToWebview({ type: 'contexts-updated', contexts: updatedContexts });
-                    break;
-                
-                case 'save-agent':
-                    const updatedAgents = await this.dispatcher.dispatch('getAgents', {});
-                    this.postMessageToWebview({ type: 'agents-updated', agents: updatedAgents.agents, status: updatedAgents.status });
-                    break;
-                
-                case 'delete-agent':
-                    const agentsAfterDelete = await this.dispatcher.dispatch('getAgents', {});
-                    this.postMessageToWebview({ type: 'agents-updated', agents: agentsAfterDelete.agents, status: agentsAfterDelete.status });
-                    break;
-                
-                case 'start-mcp-server':
-                    const startResult = await this.dispatcher.dispatch('start-mcp-server', {});
-                    this.postMessageToWebview({ 
-                        type: 'mcp-server-started', 
-                        message: startResult.message,
-                        success: startResult.success 
-                    });
-                    if (startResult.success) {
-                        vscode.window.showInformationMessage('MCP Server started successfully');
-                    } else {
-                        vscode.window.showErrorMessage(`Failed to start MCP Server: ${startResult.message}`);
-                    }
-                    break;
-                
-                case 'stop-mcp-server':
-                    const stopResult = await this.dispatcher.dispatch('stop-mcp-server', {});
-                    this.postMessageToWebview({ 
-                        type: 'mcp-server-stopped', 
-                        message: stopResult.message,
-                        success: stopResult.success 
-                    });
-                    if (stopResult.success) {
-                        vscode.window.showInformationMessage('MCP Server stopped successfully');
-                    } else {
-                        vscode.window.showErrorMessage(`Failed to stop MCP Server: ${stopResult.message}`);
-                    }
-                    break;
-                
-                // Standardized action handlers (kebab-case)
-                case 'get-contexts':
-                    this.postMessageToWebview({ type: 'contexts-updated', contexts: result });
-                    break;
-                    
-                case 'add-test-context':
-                    this.postMessageToWebview({ type: 'refreshData' });
-                    break;
-                    
-                case 'get-config':
-                    this.postMessageToWebview({ type: 'configData', config: result.config, status: result.status });
-                    break;
-                    
-                case 'get-agents':
-                    this.postMessageToWebview({ type: 'agents-updated', agents: result.agents, status: result.status });
-                    break;
-                    
-                case 'toggle-agent':
-                    this.postMessageToWebview({ type: 'agents-updated', agents: result.agents, status: result.status });
-                    break;
-                    
-                case 'set-collaboration-mode':
-                    this.postMessageToWebview({ type: 'agentsData', agents: result.agents, status: result.status });
-                    vscode.window.showInformationMessage(`Collaboration mode changed to: ${data.mode}`);
-                    break;
-                    
-                case 'update-context':
-                case 'delete-multiple-contexts':
-                    this.postMessageToWebview({ type: 'refreshData' });
-                    break;
-                    
-                case 'edit-context':
-                    this.postMessageToWebview({ type: 'editContextData', context: result });
-                    break;
-                    
-                case 'toggle-git-capture':
-                case 'toggle-file-capture':
-                    // These actions typically don't need specific responses
-                    break;
-                    
-                case 'generate-mcp-config':
-                    vscode.window.showInformationMessage('MCP configuration generated successfully');
-                    break;
-                    
-                case 'test-mcp-connection':
-                    this.postMessageToWebview({ type: 'mcpStatus', connected: result });
-                    if (result) {
-                        vscode.window.showInformationMessage('MCP Server is connected and ready');
-                    } else {
-                        vscode.window.showWarningMessage('MCP Server is not connected. Try restarting the extension.');
-                    }
-                    break;
-                    
-                case 'get-mcp-status':
-                    this.postMessageToWebview({ type: 'mcp-status-updated', status: result });
-                    break;
+                case 'app':
+                     responsePayload = await this.handleAppActions(action, payload);
+                     break;
+                default:
+                    throw new Error(`Unknown command domain: ${domain}`);
             }
-        } catch (error) {
-            Logger.error('Error handling message:', error as Error);
-            
-            // Send error to SolidJS app
-            this.postMessageToWebview({ 
-                type: 'error', 
-                message: error instanceof Error ? error.message : 'Unknown error occurred' 
-            });
-            
-            // Show error messages for user-facing actions
-            if (data.type === 'generateMCPConfig') {
-                vscode.window.showErrorMessage(`Failed to generate MCP config: ${error}`);
-            } else if (data.type === 'testMCPConnection' || data.type === 'test-database-connection') {
-                this.postMessageToWebview({ type: 'connection-status', status: 'disconnected' });
-                vscode.window.showErrorMessage(`Error testing connection: ${error}`);
-            } else if (data.type === 'getMCPStatus') {
-                this.postMessageToWebview({ type: 'mcpStatus', connected: false });
-            }
+        } catch (e: any) {
+            Logger.error(`Error handling command '${command}':`, e);
+            error = e.message;
+        }
+
+        // Send a single, standardized response back to the webview
+        this.postResponse({
+            command,
+            payload: responsePayload,
+            requestId,
+            error,
+        });
+    }
+
+    // --- Action Handlers per Domain ---
+
+    private async handleAppActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'requestInitialData':
+                const contexts = await this.database.getContexts();
+                const agents = await this.agentManager.getAllAgents();
+                const databaseConfig = this.database.getDatabaseConfig();
+                const mcpStatus = this.mcpServer.getConnectionInfo();
+                const onboardingCompleted = this.configStore.getOnboardingCompleted();
+                const tokenUsage = this.tokenMonitor.getCurrentUsage();
+
+                return {
+                    contexts,
+                    agents,
+                    databaseConfig,
+                    mcpStatus,
+                    onboardingCompleted,
+                    tokenUsage,
+                    stats: { totalContexts: contexts.length, byType: {}, byProject: {}, adapterType: databaseConfig.type }
+                };
+            case 'completeOnboarding':
+                await this.configStore.updateConfig({ onboardingCompleted: true });
+                return { success: true };
+            default:
+                throw new Error(`Unknown app action: ${action}`);
         }
     }
 
+    private async handleContextActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'delete':
+                await this.database.deleteContext(payload.id);
+                return { id: payload.id }; // Return confirmation
+            case 'update':
+                await this.database.updateContext(payload.contextId, payload.updates);
+                return await this.database.getContextById(payload.contextId);
+            case 'create':
+                const newContext = await this.database.addContext(payload.contextData);
+                return newContext;
+            case 'search':
+                return await this.database.searchContexts(payload.query);
+            default:
+                throw new Error(`Unknown context action: ${action}`);
+        }
+    }
 
-    private postMessageToWebview(message: any) {
+    private async handleAgentActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'save':
+                // Handle both create and update based on whether the agent has an ID
+                if (payload.agent.id) {
+                    await this.agentManager.updateAgent(payload.agent.id, payload.agent);
+                    return this.agentManager.getAgent(payload.agent.id);
+                } else {
+                    const newAgent = await this.agentManager.addAgent(payload.agent);
+                    return newAgent;
+                }
+            case 'delete':
+                await this.agentManager.deleteAgent(payload.id);
+                return { id: payload.id };
+            case 'toggle':
+                const toggledAgent = await this.agentManager.toggleAgent(payload.agentId);
+                return toggledAgent;
+            case 'setCollaborationMode':
+                await this.agentManager.setCollaborationMode(payload.mode);
+                return await this.agentManager.getAllAgents();
+            default:
+                throw new Error(`Unknown agent action: ${action}`);
+        }
+    }
+
+    private async handleConfigActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'updateDatabase':
+                // Database configuration cannot be updated at runtime
+                // It needs to be set before database initialization
+                vscode.window.showWarningMessage('Database configuration cannot be changed at runtime. Please restart the extension with the new configuration.');
+                return this.database.getDatabaseConfig();
+            case 'testDatabase':
+                // This would contain logic to test the connection.
+                // For now, we'll assume success.
+                vscode.window.showInformationMessage('Database connection successful.');
+                return { status: 'connected' };
+            case 'reset':
+                await this.configStore.resetToDefaults();
+                vscode.window.showInformationMessage('Configuration reset. Please reload the webview.');
+                // The frontend will trigger a reload on its side.
+                return { status: 'reset' };
+            default:
+                throw new Error(`Unknown config action: ${action}`);
+        }
+    }
+
+    private async handleMcpActions(action: string, payload: any): Promise<any> {
+        switch (action) {
+            case 'start':
+                await this.mcpServer.start();
+                vscode.window.showInformationMessage('MCP Server started.');
+                return this.mcpServer.getConnectionInfo();
+            case 'stop':
+                await this.mcpServer.stop();
+                vscode.window.showInformationMessage('MCP Server stopped.');
+                return this.mcpServer.getConnectionInfo();
+            case 'getStatus':
+                return this.mcpServer.getConnectionInfo();
+            default:
+                throw new Error(`Unknown MCP action: ${action}`);
+        }
+    }
+
+    private postResponse(response: WebviewResponse) {
         if (this.webviewView) {
-            this.webviewView.webview.postMessage(message);
+            this.webviewView.webview.postMessage(response);
         }
     }
 
@@ -254,5 +236,27 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
             text += possible.charAt(Math.floor(Math.random() * possible.length));
         }
         return text;
+    }
+
+    private setupTokenMonitorListeners() {
+        // Listen for token usage updates
+        this.tokenMonitor.on('usage-updated', (usage) => {
+            this.postResponse({ 
+                command: 'token.usageUpdated',
+                payload: { usage },
+                requestId: 'token-monitor',
+                error: undefined
+            });
+        });
+
+        // Listen for token usage warnings
+        this.tokenMonitor.on('usage-warning', (warning) => {
+            // Show VSCode notification for critical warnings
+            if (warning.type === 'critical') {
+                vscode.window.showWarningMessage(warning.message);
+            } else if (warning.type === 'warning') {
+                vscode.window.showInformationMessage(warning.message);
+            }
+        });
     }
 }

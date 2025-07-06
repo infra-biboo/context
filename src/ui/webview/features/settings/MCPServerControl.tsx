@@ -1,121 +1,95 @@
-import { Component, Show } from 'solid-js';
+import { Component } from 'solid-js';
+import { Link, CheckCircle, XCircle, AlertTriangle } from 'lucide-solid';
 import { store } from '../../core/store';
-import { VSCodeBridge } from '../../core/vscode-bridge';
+import { appController } from '../../core/app-controller';
 import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
 const MCPServerControl: Component = () => {
-  const bridge = VSCodeBridge.getInstance();
-
+  // Defensive check to prevent undefined errors
+  if (!store.session || !store.data || !store.ui) {
+    return <div>Loading...</div>;
+  }
+  
   const handleStartServer = () => {
-    bridge.startMCPServer();
+    appController.startMcpServer();
   };
 
   const handleStopServer = () => {
-    bridge.stopMCPServer();
-  };
-
-  const handleRefreshStatus = () => {
-    bridge.getMCPStatus();
-  };
-
-  const getStatusIcon = () => {
-    return store.mcpStatus().connected ? '🟢' : '🔴';
-  };
-
-  const getStatusColor = () => {
-    return store.mcpStatus().connected ? 'var(--vscode-testing-iconPassed)' : 'var(--vscode-testing-iconFailed)';
+    appController.stopMcpServer();
   };
 
   return (
     <div class="mcp-server-control">
-      <div class="mcp-header">
-        <h4>🔗 MCP Server Control</h4>
-        <p>Control the Model Context Protocol server for Claude Desktop integration</p>
+      <h3><Link size={20} style={{display: 'inline', 'margin-right': '8px'}} /> MCP Server Control</h3>
+      <p class="section-description">
+        Control the Model Context Protocol server that enables communication with Claude AI tools.
+      </p>
+      
+      <div class="server-status">
+        <div class="status-row">
+          <span class="label">Status:</span>
+          <span class={`status ${store.session.mcpStatus.connected ? 'connected' : 'disconnected'}`}>
+            {store.session.mcpStatus.connected ? <><CheckCircle size={16} color="#4CAF50" style={{'margin-right': '4px'}} /> Connected</> : <><XCircle size={16} color="#f44336" style={{'margin-right': '4px'}} /> Disconnected</>}
+          </span>
+        </div>
+        <div class="status-row">
+          <span class="label">Message:</span>
+          <span class="message">{store.session.mcpStatus.status}</span>
+        </div>
       </div>
 
-      <div class="mcp-status">
-        <div class="status-row">
-          <span class="status-label">Status:</span>
-          <div class="status-value" style={{ color: getStatusColor() }}>
-            {getStatusIcon()} {store.mcpStatus().status}
+      <div class="server-controls">
+        <Button
+          variant="primary"
+          onClick={handleStartServer}
+          disabled={store.session.mcpStatus.connected || store.ui.isLoading}
+        >
+          {store.ui.isLoading ? (
+            <>
+              <LoadingSpinner size="small" />
+              Starting...
+            </>
+          ) : 'Start Server'}
+        </Button>
+
+        <Button
+          variant="secondary"
+          onClick={handleStopServer}
+          disabled={!store.session.mcpStatus.connected || store.ui.isLoading}
+        >
+          {store.ui.isLoading ? (
+            <>
+              <LoadingSpinner size="small" />
+              Stopping...
+            </>
+          ) : 'Stop Server'}
+        </Button>
+      </div>
+
+      <div class="server-info">
+        <h4>Configuration Details</h4>
+        <div class="config-details">
+          <div class="config-row">
+            <span class="label">Database Type:</span>
+            <span class="value">{store.session.databaseConfig.type?.toUpperCase()}</span>
+          </div>
+          <div class="config-row">
+            <span class="label">Database Path:</span>
+            <span class="value">{store.session.databaseConfig.json?.path || 'N/A'}</span>
+          </div>
+          <div class="config-row">
+            <span class="label">Max Contexts:</span>
+            <span class="value">{store.session.databaseConfig.json?.maxContexts || 'N/A'}</span>
           </div>
         </div>
       </div>
 
-      <div class="mcp-actions">
-        <Show when={!store.mcpStatus().connected} fallback={
-          <Button 
-            variant="danger" 
-            onClick={handleStopServer}
-            disabled={store.isLoading()}
-          >
-            <Show when={store.isLoading()} fallback="🛑 Stop Server">
-              <LoadingSpinner size="small" />
-              Stopping...
-            </Show>
-          </Button>
-        }>
-          <Button 
-            variant="primary" 
-            onClick={handleStartServer}
-            disabled={store.isLoading()}
-          >
-            <Show when={store.isLoading()} fallback="▶️ Start Server">
-              <LoadingSpinner size="small" />
-              Starting...
-            </Show>
-          </Button>
-        </Show>
-
-        <Button 
-          variant="secondary" 
-          onClick={handleRefreshStatus}
-          disabled={store.isLoading()}
-        >
-          🔄 Refresh
-        </Button>
-      </div>
-
-      <div class="mcp-info">
-        <h5>📋 How to Use</h5>
-        <ol>
-          <li><strong>Start the server</strong> using the button above</li>
-          <li><strong>Copy the configuration</strong> to your Claude Desktop settings</li>
-          <li><strong>Restart Claude Desktop</strong> to connect to the server</li>
-        </ol>
-        
-        <div class="config-example">
-          <h6>Claude Desktop Configuration:</h6>
-          <pre>
-{`{
-  "mcpServers": {
-    "context-manager": {
-      "command": "node",
-      "args": ["/path/to/your/project/dist/mcp-server.js"],
-      "env": {
-        "DB_TYPE": "${store.databaseConfig().type}",
-        ${store.databaseConfig().type === 'json' 
-          ? `"SQLITE_PATH": "${store.databaseConfig().json?.path || './context.json'}"` 
-          : `"PG_HOST": "${store.databaseConfig().postgresql?.host || 'localhost'}",
-        "PG_DATABASE": "${store.databaseConfig().postgresql?.database || 'context_manager'}"`
-        }
-      }
-    }
-  }
-}`}
-          </pre>
-          <p style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 8px;">
-            Replace "/path/to/your/project" with the actual path to this extension's directory.
-          </p>
-        </div>
-      </div>
-
-      <Show when={store.errorMessage()}>
+      {store.ui.errorMessage && (
         <div class="error-message">
-          ❌ {store.errorMessage()}
+          <AlertTriangle size={16} style={{'margin-right': '4px'}} /> {store.ui.errorMessage}
         </div>
-      </Show>
+      )}
     </div>
   );
 };

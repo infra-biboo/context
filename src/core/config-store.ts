@@ -10,6 +10,8 @@ export interface AppConfig {
         theme: 'auto' | 'light' | 'dark';
         density: 'compact' | 'normal' | 'spacious';
     };
+    collaborationMode: 'individual' | 'collaborative' | 'hierarchical';
+    onboardingCompleted?: boolean;
 }
 
 export class ConfigStore {
@@ -39,7 +41,9 @@ export class ConfigStore {
             ui: {
                 theme: 'auto',
                 density: 'normal'
-            }
+            },
+            collaborationMode: 'collaborative',
+            onboardingCompleted: false
         };
     }
 
@@ -64,9 +68,32 @@ export class ConfigStore {
         await this.saveConfig();
     }
 
+    getOnboardingCompleted(): boolean {
+        return this.context.globalState.get('onboardingCompleted', false);
+    }
+
+    async setOnboardingCompleted(completed: boolean): Promise<void> {
+        await this.context.globalState.update('onboardingCompleted', completed);
+    }
+
     subscribe(listener: (config: AppConfig) => void): () => void {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
+    }
+
+    async resetToDefaults(): Promise<void> {
+        // Reset to default configuration
+        this.config = this.getDefaultConfig();
+        
+        // Clear all stored preferences
+        await this.context.globalState.update('config', undefined);
+        await this.context.globalState.update('onboardingCompleted', false);
+        
+        // Save the default config
+        await this.saveConfig();
+        
+        // Notify all listeners
+        this.notifyListeners();
     }
 
     private notifyListeners(): void {

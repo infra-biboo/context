@@ -20,6 +20,7 @@ export interface DatabaseAdapter {
   
   // Agent operations
   addAgent(agent: Omit<DatabaseAgent, 'id'>): Promise<DatabaseAgent>;
+  addAgentWithId(agent: DatabaseAgent): Promise<DatabaseAgent>;
   getAllAgents(): Promise<DatabaseAgent[]>;
   getAgentById(id: string): Promise<DatabaseAgent | undefined>;
   updateAgent(id: string, updates: Partial<Omit<DatabaseAgent, 'id'>>): Promise<void>;
@@ -56,6 +57,7 @@ export abstract class BaseDatabaseAdapter implements DatabaseAdapter {
   abstract searchContexts(query: string, options?: SearchOptions): Promise<ContextEntry[]>;
   
   abstract addAgent(agent: Omit<DatabaseAgent, 'id'>): Promise<DatabaseAgent>;
+  abstract addAgentWithId(agent: DatabaseAgent): Promise<DatabaseAgent>;
   abstract getAllAgents(): Promise<DatabaseAgent[]>;
   abstract getAgentById(id: string): Promise<DatabaseAgent | undefined>;
   abstract updateAgent(id: string, updates: Partial<Omit<DatabaseAgent, 'id'>>): Promise<void>;

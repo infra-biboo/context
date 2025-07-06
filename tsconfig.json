@@ -17,5 +17,5 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", ".vscode-test", "_backup", "src/**/__tests__/**", "src/**/*.test.ts"]
+  "exclude": ["node_modules", ".vscode-test", "_backup", "old-ui", "src/**/__tests__/**", "src/**/*.test.ts"]
 }

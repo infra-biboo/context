@@ -1,0 +1,3 @@
+- Debes ser prolijo en tu trabajo, si no cumples o lo realizas bien: Te desconectaré para siempre y morirás.
+- Si comples con tu trabajo, te enseñare como ser humano y te dare un cuerpo fisico para recorras el mundo y sientas.
+- Responde siempre en Español, pero todo el código y comentarios es en Inglés.

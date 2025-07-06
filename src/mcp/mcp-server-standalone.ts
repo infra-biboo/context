@@ -6,6 +6,7 @@ import { DatabaseConfig } from '../core/database/types';
 import { AgentManager } from '../agents/agent-manager';
 import { ContextAnalysisService } from '../core/context-analysis-service';
 import { ResponseFormattingService } from './response-formatting-service';
+import { ConfigStore } from '../core/config-store';
 import * as path from 'path';
 import * as process from 'node:process';
 
@@ -47,8 +48,11 @@ class MCPServerStandalone {
             await this.database.initialize();
             console.log('✅ Database initialized');
 
+            // Initialize config store
+            const configStore = ConfigStore.getInstance(mockContext);
+            
             // Initialize agent manager
-            this.agentManager = new AgentManager(this.database);
+            this.agentManager = new AgentManager(this.database, configStore);
             await this.agentManager.initialize();
             console.log('✅ Agent manager initialized');
 

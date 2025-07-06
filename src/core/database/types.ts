@@ -55,7 +55,7 @@ export interface SyncResult {
 export interface ContextEntry {
     id: string;
     projectPath: string;
-    type: 'conversation' | 'decision' | 'code' | 'issue';
+    type: 'conversation' | 'decision' | 'code' | 'issue' | 'custom' | 'note' | 'reference';
     content: string;
     timestamp: Date;
     importance: number;

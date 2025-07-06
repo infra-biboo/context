@@ -1,4 +1,5 @@
 import { Component, createSignal, Show } from 'solid-js';
+import { EyeOff, Eye, Database, AlertTriangle } from 'lucide-solid';
 import { DatabaseConfig } from '../../../../core/database/types';
 
 interface PostgresConfigFormProps {
@@ -82,7 +83,7 @@ const PostgresConfigForm: Component<PostgresConfigFormProps> = (props) => {
               class="password-toggle"
               onClick={() => setShowPassword(!showPassword())}
             >
-              {showPassword() ? '🙈' : '👁️'}
+              {showPassword() ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
@@ -111,7 +112,7 @@ const PostgresConfigForm: Component<PostgresConfigFormProps> = (props) => {
       </div>
 
       <div class="config-info">
-        <h4>🐘 PostgreSQL Mode Features</h4>
+        <h4><Database size={16} style={{'margin-right': '8px', display: 'inline'}} /> PostgreSQL Mode Features</h4>
         <ul>
           <li>✅ <strong>Unlimited:</strong> No context limits</li>
           <li>✅ <strong>Scalable:</strong> Handles large datasets</li>
@@ -123,7 +124,7 @@ const PostgresConfigForm: Component<PostgresConfigFormProps> = (props) => {
 
       <Show when={props.config?.vectorDimensions && props.config.vectorDimensions !== 384}>
         <div class="config-warning">
-          ⚠️ <strong>Note:</strong> Vector dimensions must match your embedding model
+          <AlertTriangle size={16} style={{'margin-right': '4px'}} /> <strong>Note:</strong> Vector dimensions must match your embedding model
         </div>
       </Show>
     </div>

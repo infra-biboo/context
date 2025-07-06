@@ -6,6 +6,14 @@ import { AgentManager } from '../agents/agent-manager';
 import { ContextAnalysisService } from '../core/context-analysis-service';
 import { ResponseFormattingService } from './response-formatting-service';
 
+// Dynamically import vscode for optional usage
+let vscode: any;
+try {
+    vscode = require('vscode');
+} catch (e) {
+    vscode = null;
+}
+
 export class MCPServer {
     private server: McpServer;
     private isRunning: boolean = false;
@@ -68,6 +76,36 @@ export class MCPServer {
             },
             async ({ agent, task, priority }) => {
                 return await this.handleActivateAgentContext({ agent, task, priority });
+            }
+        );
+
+        // Eureka: Save summarized context tool
+        this.server.registerTool(
+            'save_summarized_context',
+            {
+                title: 'Save Summarized Context',
+                description: 'Saves a pre-summarized text as a new context entry, typically triggered by a keyword.',
+                inputSchema: {
+                    summary: z.string().describe('The AI-generated summary of the recent conversation.'),
+                }
+            },
+            async ({ summary }) => {
+                const projectPath = vscode?.workspace?.workspaceFolders?.[0]?.uri?.fsPath || 'unknown';
+
+                const contextId = await this.database.addContext({
+                    projectPath,
+                    type: 'decision',
+                    content: summary,
+                    importance: 7, // Revelations are often important
+                    tags: ['eureka-capture', 'ai-summarized']
+                });
+
+                return {
+                    content: [{
+                        type: 'text',
+                        text: `✅ Context 'Eureka!' saved successfully (ID: ${contextId}).`
+                    }]
+                };
             }
         );
     }

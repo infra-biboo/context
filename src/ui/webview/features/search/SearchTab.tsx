@@ -1,20 +1,37 @@
 import { Component, createSignal, For, Show } from 'solid-js';
+import { Search, Lightbulb, AlertTriangle } from 'lucide-solid';
 import { store } from '../../core/store';
-import { VSCodeBridge } from '../../core/vscode-bridge';
+import { appController } from '../../core/app-controller';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Button from '../../components/Button';
 
 const SearchTab: Component = () => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [searchType, setSearchType] = createSignal('all');
-  const bridge = VSCodeBridge.getInstance();
+  const [hasSearched, setHasSearched] = createSignal(false);
+  
+  // Defensive check to prevent undefined errors
+  if (!store.session || !store.data || !store.ui) {
+    return <div>Loading...</div>;
+  }
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (searchQuery().trim()) {
-      bridge.searchContexts(searchQuery(), {
-        type: searchType() === 'all' ? undefined : searchType()
-      });
+      try {
+        setHasSearched(true);
+        await appController.searchContexts(searchQuery());
+      } catch (error) {
+        console.error('Search failed:', error);
+      }
     }
+  };
+
+  // Show all contexts initially, or search results after searching
+  const displayedContexts = () => {
+    if (hasSearched()) {
+      return store.data.searchResults;
+    }
+    return store.data.contexts;
   };
 
   const handleKeyPress = (e: KeyboardEvent) => {
@@ -23,14 +40,10 @@ const SearchTab: Component = () => {
     }
   };
 
-  const handleDeleteContext = (id: string) => {
-    bridge.deleteContext(id);
-  };
-
   return (
     <div class="search-tab">
       <div class="tab-header">
-        <h2>🔍 Search Contexts</h2>
+        <h2><Search size={20} style={{display: 'inline', 'margin-right': '8px'}} /> Search Contexts</h2>
         <p>Find and manage your stored contexts</p>
       </div>
 
@@ -46,9 +59,9 @@ const SearchTab: Component = () => {
           />
           <Button 
             onClick={handleSearch}
-            disabled={!searchQuery().trim() || store.isLoading()}
+            disabled={!searchQuery().trim() || store.ui.isLoading}
           >
-            <Show when={store.isLoading()} fallback="🔍 Search">
+            <Show when={store.ui.isLoading} fallback={<><Search size={16} style={{'margin-right': '4px'}} /> Search</>}>
               <LoadingSpinner size="small" />
             </Show>
           </Button>
@@ -69,38 +82,51 @@ const SearchTab: Component = () => {
       </div>
 
       <div class="search-results">
-        <Show when={store.isLoading()}>
+        <Show when={store.ui.isLoading}>
           <LoadingSpinner text="Searching..." />
         </Show>
 
-        <Show when={store.searchResults().length === 0 && !store.isLoading()}>
+        <Show when={displayedContexts().length === 0 && !store.ui.isLoading}>
           <div class="empty-state">
-            <div class="empty-icon">🔍</div>
-            <h3>No results found</h3>
-            <p>Try adjusting your search query or filters</p>
+            <div class="empty-icon"><Search size={48} /></div>
+            <h3>{hasSearched() ? "No results found" : "No contexts yet"}</h3>
+            <p>{hasSearched() ? "Try adjusting your search query or filters" : "Create some contexts to see them here"}</p>
           </div>
         </Show>
 
-        <Show when={store.searchResults().length > 0}>
+        <Show when={displayedContexts().length > 0}>
           <div class="results-header">
-            <h3>Results ({store.searchResults().length})</h3>
+            <h3>{hasSearched() ? `Search Results (${displayedContexts().length})` : `All Contexts (${displayedContexts().length})`}</h3>
+            <Show when={hasSearched()}>
+              <Button 
+                variant="secondary" 
+                size="small" 
+                onClick={() => {
+                  setHasSearched(false);
+                  setSearchQuery('');
+                }}
+              >
+                Show All
+              </Button>
+            </Show>
           </div>
           <div class="results-list">
-            <For each={store.searchResults()}>
+            <For each={displayedContexts()}>
               {(context) => (
-                <div class="context-card">
+                <div class={`context-card ${context.tags?.includes('eureka-capture') ? 'eureka-context' : ''}`}>
                   <div class="context-header">
-                    <span class="context-type">{context.type}</span>
-                    <span class="context-project">{context.projectPath}</span>
+                    {context.tags?.includes('eureka-capture') && <span class="eureka-icon"><Lightbulb size={16} /></span>}
+                    <span class="context-type">{context.type || 'unknown'}</span>
+                    <span class="context-project">{context.projectPath || 'no-project'}</span>
                     <span class="context-timestamp">
-                      {new Date(context.timestamp).toLocaleDateString()}
+                      {context.timestamp ? new Date(context.timestamp).toLocaleDateString() : 'No date'}
                     </span>
                   </div>
                   <div class="context-content">
-                    <p>{context.content.substring(0, 200)}...</p>
+                    <p>{context.content?.substring(0, 200) || 'No content available'}...</p>
                   </div>
                   <div class="context-tags">
-                    <For each={context.tags}>
+                    <For each={context.tags || []}>
                       {(tag) => (
                         <span class="tag">{tag}</span>
                       )}
@@ -108,12 +134,12 @@ const SearchTab: Component = () => {
                   </div>
                   <div class="context-actions">
                     <span class="importance">
-                      Importance: {context.importance}/10
+                      Importance: {context.importance || 0}/10
                     </span>
                     <Button 
                       size="small" 
                       variant="danger"
-                      onClick={() => handleDeleteContext(context.id)}
+                      onClick={() => appController.deleteContext(context.id)}
                     >
                       Delete
                     </Button>
@@ -125,9 +151,9 @@ const SearchTab: Component = () => {
         </Show>
       </div>
 
-      <Show when={store.errorMessage()}>
+      <Show when={store.ui.errorMessage}>
         <div class="error-message">
-          ❌ {store.errorMessage()}
+          <AlertTriangle size={16} style={{'margin-right': '4px'}} /> {store.ui.errorMessage}
         </div>
       </Show>
     </div>

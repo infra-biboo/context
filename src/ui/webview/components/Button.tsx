@@ -6,6 +6,7 @@ interface ButtonProps {
   type?: 'button' | 'submit' | 'reset';
   variant?: 'primary' | 'secondary' | 'danger';
   size?: 'small' | 'medium' | 'large';
+  class?: string;
   children: JSX.Element;
 }
 
@@ -15,7 +16,7 @@ const Button: Component<ButtonProps> = (props) => {
   
   return (
     <button 
-      class={`btn btn-${variant} btn-${size}`}
+      class={`btn btn-${variant} btn-${size} ${props.class || ''}`}
       onClick={props.onClick}
       disabled={props.disabled}
       type={props.type || 'button'}

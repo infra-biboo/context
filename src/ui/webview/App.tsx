@@ -1,81 +1,112 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
-import { store } from './core/store';
-import { VSCodeBridge } from './core/vscode-bridge';
+import { Component, For, createMemo, Switch, Match, createEffect } from 'solid-js';
+import { store, actions } from './core/store';
+import { appController } from './core/app-controller';
 import GeneralTab from './features/general/GeneralTab';
 import AgentsTab from './features/agents/AgentsTab';
 import SearchTab from './features/search/SearchTab';
+import CreateTab from './features/create/CreateTab';
 import SettingsTab from './features/settings/SettingsTab';
+import OnboardingWizard from './features/onboarding/OnboardingWizard';
+import TokenUsageIndicator from './components/TokenUsageIndicator';
+import { I18nProvider, useTranslation } from './i18n';
+import { Layout, Users, Search, Edit, Settings, CheckCircle, XCircle } from 'lucide-solid';
 import './style.css';
 
-type TabName = 'general' | 'agents' | 'search' | 'settings';
+type TabName = 'general' | 'agents' | 'search' | 'create' | 'settings';
 
-const App: Component = () => {
-  const [activeTab, setActiveTab] = createSignal<TabName>('general');
-  const bridge = VSCodeBridge.getInstance();
-
-  const handleTabClick = (tabId: TabName) => {
-    console.log('Tab clicked:', tabId);
-    setActiveTab(tabId);
-  };
-
-  onMount(() => {
-    // Initialize the bridge and start listening for messages
-    bridge.initialize();
-    console.log('🚀 SolidJS App Started');
-    console.log('Initial active tab:', activeTab());
-    console.log('Available tabs:', tabs);
-  });
-
-  const tabs = [
-    { id: 'general', label: 'General', icon: '📊' },
-    { id: 'agents', label: 'Agents', icon: '🤖' },
-    { id: 'search', label: 'Search', icon: '🔍' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' }
+const AppContent: Component = () => {
+  const { t } = useTranslation();
+  
+  const allTabs = [
+    { id: 'general', label: t('common.general'), icon: <Layout size={16} /> },
+    { id: 'agents', label: t('common.agents'), icon: <Users size={16} /> },
+    { id: 'search', label: t('common.search'), icon: <Search size={16} /> },
+    { id: 'create', label: t('common.create'), icon: <Edit size={16} /> },
+    { id: 'settings', label: t('common.settings'), icon: <Settings size={16} /> }
   ] as const;
 
-  // No need for renderActiveTab function, will use Show components inline
+  const visibleTabs = createMemo(() => {
+    // Verificación defensiva para evitar errores
+    if (store.session?.mcpStatus?.connected) {
+      return allTabs;
+    }
+    // Return a more restricted set of tabs when not connected
+    return allTabs.filter(tab => tab.id === 'general' || tab.id === 'settings');
+  });
+
+  // This effect ensures that if the active tab is no longer visible,
+  // we reset to a default valid tab.
+  createEffect(() => {
+    const tabs = visibleTabs();
+    const currentTab = store.ui.activeTab;
+    
+    // Solo cambiar si el tab actual no está disponible Y es diferente de 'general'
+    if (!tabs.some(tab => tab.id === currentTab) && currentTab !== 'general') {
+      // Verificar que 'general' esté disponible antes de cambiarlo
+      const generalTab = tabs.find(tab => tab.id === 'general');
+      if (generalTab) {
+        actions.setActiveTab('general');
+      } else if (tabs.length > 0) {
+        // Si general no está disponible, usar el primer tab disponible
+        actions.setActiveTab(tabs[0].id as any);
+      }
+    }
+  });
+
+  // El store puede inicializarse gradualmente, no bloqueamos la UI
 
   return (
-    <div class="app">
-      <nav class="tabs">
-        <For each={tabs}>
-          {(tab) => (
-            <button 
-              class={`tab ${activeTab() === tab.id ? 'active' : ''}`}
-              onClick={() => handleTabClick(tab.id as TabName)}
-            >
-              <span class="tab-icon">{tab.icon}</span>
-              {tab.label}
-            </button>
-          )}
-        </For>
-      </nav>
-      
-      <main class="tab-content">
-        <Show when={activeTab() === 'general'}>
-          <GeneralTab />
-        </Show>
-        <Show when={activeTab() === 'agents'}>
-          <AgentsTab />
-        </Show>
-        <Show when={activeTab() === 'search'}>
-          <SearchTab />
-        </Show>
-        <Show when={activeTab() === 'settings'}>
-          <SettingsTab />
-        </Show>
-      </main>
-      
-      <footer class="status-bar">
-        <span class="status-indicator">
-          {store.connectionStatus() === 'connected' ? '🟢' : '🔴'} 
-          {store.connectionStatus()}
-        </span>
-        <span class="db-mode">
-          Mode: {store.databaseConfig().type?.toUpperCase() || 'UNKNOWN'}
-        </span>
-      </footer>
-    </div>
+    <Switch>
+      <Match when={!store.session?.onboardingCompleted}>
+        <OnboardingWizard />
+      </Match>
+      <Match when={store.session?.onboardingCompleted}>
+        <div class="app">
+          <nav class="tabs">
+            <For each={visibleTabs()}>
+              {(tab) => (
+                <button
+                  class={`tab ${store.ui.activeTab === tab.id ? 'active' : ''}`}
+                  onClick={() => actions.setActiveTab(tab.id as TabName)}
+                >
+                  <span class="tab-icon">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              )}
+            </For>
+          </nav>
+
+          <main class="tab-content">
+            <Switch>
+              <Match when={store.ui.activeTab === 'general'}><GeneralTab /></Match>
+              <Match when={store.ui.activeTab === 'agents'}><AgentsTab /></Match>
+              <Match when={store.ui.activeTab === 'search'}><SearchTab /></Match>
+              <Match when={store.ui.activeTab === 'create'}><CreateTab /></Match>
+              <Match when={store.ui.activeTab === 'settings'}><SettingsTab /></Match>
+            </Switch>
+          </main>
+
+          <footer class="status-bar">
+            <span class="status-indicator">
+              {store.session?.mcpStatus?.connected ? <CheckCircle size={16} color="#4CAF50" /> : <XCircle size={16} color="#f44336" />}
+              MCP: {store.session?.mcpStatus?.status || 'Loading...'}
+            </span>
+            <span class="db-mode">
+              DB: {store.session?.databaseConfig?.type?.toUpperCase() || 'UNKNOWN'}
+            </span>
+            <TokenUsageIndicator />
+          </footer>
+        </div>
+      </Match>
+    </Switch>
+  );
+};
+
+const App: Component = () => {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 };
 

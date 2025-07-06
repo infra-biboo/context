@@ -1,21 +1,29 @@
 import { Component, createSignal, Show } from 'solid-js';
-import { store } from '../../core/store';
-import { VSCodeBridge } from '../../core/vscode-bridge';
+import { store, actions } from '../../core/store';
+import { appController } from '../../core/app-controller';
+import { useTranslation } from '../../i18n';
 import { DatabaseConfig } from '../../../../core/database/types';
 import Button from '../../components/Button';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import DatabaseModeSelector from './DatabaseModeSelector';
 import JsonConfigDisplay from './JsonConfigDisplay';
 import PostgresConfigForm from './PostgresConfigForm';
-import ConfigStatusCard from './ConfigStatusCard';
 import MCPServerControl from './MCPServerControl';
+import AutoCaptureSettings from './AutoCaptureSettings';
+import LanguageSelector from './LanguageSelector';
 
 const SettingsTab: Component = () => {
-  const [pendingConfig, setPendingConfig] = createSignal<DatabaseConfig>(store.databaseConfig());
-  const [isTestingConnection, setIsTestingConnection] = createSignal(false);
-  const bridge = VSCodeBridge.getInstance();
+  const { t } = useTranslation();
+  
+  if (!store.session || !store.data || !store.ui) {
+    return <div>{t('common.loading')}</div>;
+  }
 
-  const handleModeChange = (mode: 'json' | 'postgresql' | 'hybrid') => {
+  const [pendingConfig, setPendingConfig] = createSignal<DatabaseConfig>(store.session.databaseConfig);
+  const [showResetConfirm, setShowResetConfirm] = createSignal(false);
+  const [activeDBTab, setActiveDBTab] = createSignal<'individual' | 'team'>('individual');
+
+  const handleModeChange = (mode: 'json' | 'postgresql') => {
     const currentConfig = pendingConfig();
     if (mode === 'json') {
       setPendingConfig({
@@ -45,99 +53,94 @@ const SettingsTab: Component = () => {
     });
   };
 
-  const handleTestConnection = async () => {
-    setIsTestingConnection(true);
-    try {
-      await bridge.testDatabaseConnection(pendingConfig());
-    } catch (error) {
-      console.error('Connection test failed:', error);
-    } finally {
-      setIsTestingConnection(false);
-    }
-  };
-
   const handleSaveConfig = () => {
-    bridge.updateDatabaseConfig(pendingConfig());
+    appController.updateDatabaseConfig(pendingConfig());
   };
 
-  const hasUnsavedChanges = () => {
-    return JSON.stringify(pendingConfig()) !== JSON.stringify(store.databaseConfig());
+  const handleResetConfig = () => {
+    actions.setOnboardingCompleted(false);
+    appController.resetConfig();
+    setShowResetConfirm(false);
   };
 
   return (
     <div class="settings-tab">
-      <div class="settings-header">
-        <h2>⚙️ Database Configuration</h2>
-        <p>Configure how Claude Context Manager stores and retrieves your context data.</p>
+      <div class="settings-section">
+        <h3>1. {t('settings.language.title')}</h3>
+        <LanguageSelector />
       </div>
 
-      <div class="settings-content">
-        <div class="settings-section">
-          <h3>Database Mode</h3>
-          <DatabaseModeSelector 
-            currentMode={pendingConfig().type}
-            onModeChange={handleModeChange}
-          />
-        </div>
+      <div class="settings-section">
+        <h3>2. {t('settings.mcpServer.title')}</h3>
+        <MCPServerControl />
+      </div>
 
-        <div class="settings-section">
-          <h3>Configuration</h3>
-          <Show 
-            when={pendingConfig().type === 'json'}
-            fallback={
-              <PostgresConfigForm 
-                config={pendingConfig().postgresql}
-                onChange={handlePostgresConfigChange}
-              />
-            }
+      <div class="settings-section">
+        <h3>3. Auto-Capture Settings</h3>
+        <AutoCaptureSettings />
+      </div>
+
+      <div class="settings-section">
+        <h3>4. {t('settings.database.title')}</h3>
+        <div class="tabs">
+          <button 
+            class={`tab ${activeDBTab() === 'individual' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveDBTab('individual');
+              handleModeChange('json');
+            }}
           >
+            Context Individual
+          </button>
+          <button 
+            class={`tab ${activeDBTab() === 'team' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveDBTab('team');
+              handleModeChange('postgresql');
+            }}
+          >
+            Context Team PRO (PostgreSQL)
+          </button>
+        </div>
+        <div class="tab-content">
+          <Show when={activeDBTab() === 'individual'}>
             <JsonConfigDisplay config={pendingConfig().json} />
           </Show>
-        </div>
-
-        <div class="settings-section">
-          <h3>Current Status</h3>
-          <ConfigStatusCard 
-            currentConfig={store.databaseConfig()}
-            connectionStatus={store.connectionStatus()}
-            stats={store.stats()}
-          />
-        </div>
-
-        <div class="settings-section">
-          <MCPServerControl />
-        </div>
-
-        <div class="settings-actions">
-          <Show when={pendingConfig().type === 'postgresql'}>
-            <Button 
-              variant="secondary" 
-              onClick={handleTestConnection}
-              disabled={isTestingConnection()}
-            >
-              <Show when={isTestingConnection()} fallback="Test Connection">
-                <LoadingSpinner size="small" />
-                Testing...
-              </Show>
-            </Button>
+          <Show when={activeDBTab() === 'team'}>
+            <PostgresConfigForm 
+              config={pendingConfig().postgresql}
+              onChange={handlePostgresConfigChange}
+            />
           </Show>
-
-          <Button 
-            variant="primary" 
-            onClick={handleSaveConfig}
-            disabled={!hasUnsavedChanges() || store.isLoading()}
-          >
-            <Show when={store.isLoading()} fallback="Save Configuration">
-              <LoadingSpinner size="small" />
-              Saving...
-            </Show>
-          </Button>
         </div>
+        <Button 
+          variant="primary" 
+          onClick={handleSaveConfig}
+          disabled={JSON.stringify(pendingConfig()) === JSON.stringify(store.session.databaseConfig)}
+        >
+          Save Database Configuration
+        </Button>
+      </div>
 
-        <Show when={store.errorMessage()}>
-          <div class="error-message">
-            ❌ {store.errorMessage()}
-          </div>
+      <div class="settings-section">
+        <h3>4. Language</h3>
+        <p>Language settings will be available in a future update.</p>
+      </div>
+
+      <div class="settings-section">
+        <h3>5. Reiniciar Configuración</h3>
+        <p>Reinicia todas las configuraciones y vuelve a mostrar el wizard de onboarding.</p>
+        <Show 
+          when={!showResetConfirm()}
+          fallback={
+            <div>
+              <p>¿Estás seguro?</p>
+              <Button variant="danger" onClick={handleResetConfig}>Sí, Reiniciar</Button>
+              <Button variant="secondary" onClick={() => setShowResetConfirm(false)}>Cancelar</Button>
+            </div>
+          }
+        >
+          <Button variant="danger" onClick={() => setShowResetConfirm(true)}>Reiniciar Todo</Button>
         </Show>
       </div>
     </div>

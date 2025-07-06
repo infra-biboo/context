@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { ClipboardList, AlertTriangle } from 'lucide-solid';
 import { DatabaseConfig } from '../../../../core/database/types';
 
 interface JsonConfigDisplayProps {
@@ -23,7 +24,7 @@ const JsonConfigDisplay: Component<JsonConfigDisplayProps> = (props) => {
       </div>
 
       <div class="config-info">
-        <h4>📋 JSON Mode Features</h4>
+        <h4><ClipboardList size={16} style={{'margin-right': '8px', display: 'inline'}} /> JSON Mode Features</h4>
         <ul>
           <li>✅ <strong>Fast:</strong> No network overhead</li>
           <li>✅ <strong>Simple:</strong> No setup required</li>
@@ -34,7 +35,7 @@ const JsonConfigDisplay: Component<JsonConfigDisplayProps> = (props) => {
 
       <Show when={props.config?.maxContexts && props.config.maxContexts > 2000}>
         <div class="config-warning">
-          ⚠️ <strong>Warning:</strong> High context limits may impact performance
+          <AlertTriangle size={16} style={{'margin-right': '4px'}} /> <strong>Warning:</strong> High context limits may impact performance
         </div>
       </Show>
     </div>
