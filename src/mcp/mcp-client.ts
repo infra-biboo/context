@@ -233,7 +233,7 @@ Make it memorable and actionable. Maximum 150 words.`
             Logger.info('Attempting MCP enrichment...');
             
             // Simulate MCP enrichment with enhanced context
-            const enrichedResponse = `🤖 **AI-Enhanced Context via MCP**\n\n${prompt}\n\n*Generated through MCP server integration*`;
+            const enrichedResponse = `MCP: 🤖 **AI-Enhanced Context**\n\n${prompt}\n\n*Generated through MCP server integration*`;
             
             Logger.info('MCP enrichment completed');
             return enrichedResponse;
@@ -254,7 +254,7 @@ Make it memorable and actionable. Maximum 150 words.`
             return {
                 content: [{
                     type: 'text',
-                    text: `🤖 **Enhanced via ${toolName}**\n\n${args.summary}\n\n*This context was processed by the MCP server*`
+                    text: `MCP: 🤖 **Enhanced via ${toolName}**\n\n${args.summary}\n\n*This context was processed by the MCP server*`
                 }]
             };
         } catch (error) {
@@ -309,26 +309,26 @@ Make it memorable and actionable. Maximum 150 words.`
 
         const templates = {
             en: {
-                security: `🔒 **Security Update**\nCommit: "${commitMessage}"\n\n**Category**: Security Enhancement\n**Impact**: ${impact}\n**What Changed**: Security-related modifications that may affect authentication, authorization, or data protection.\n**Action Required**: Review security implications and test access controls.\n**Importance**: ${importance}/10`,
+                security: `LOCAL: 🔒 **Security Update**\nCommit: "${commitMessage}"\n\n**Category**: Security Enhancement\n**Impact**: ${impact}\n**What Changed**: Security-related modifications that may affect authentication, authorization, or data protection.\n**Action Required**: Review security implications and test access controls.\n**Importance**: ${importance}/10`,
                 
-                'major-change': `⚠️ **Major Change**\nCommit: "${commitMessage}"\n\n**Category**: Significant Update\n**Impact**: ${impact}\n**What Changed**: Important structural or behavioral changes that may affect system operation.\n**Action Required**: Review changes carefully and coordinate with team.\n**Importance**: ${importance}/10`,
+                'major-change': `LOCAL: ⚠️ **Major Change**\nCommit: "${commitMessage}"\n\n**Category**: Significant Update\n**Impact**: ${impact}\n**What Changed**: Important structural or behavioral changes that may affect system operation.\n**Action Required**: Review changes carefully and coordinate with team.\n**Importance**: ${importance}/10`,
                 
-                bugfix: `🐛 **Bug Fix**\nCommit: "${commitMessage}"\n\n**Category**: Issue Resolution\n**Impact**: ${impact}\n**What Changed**: Corrected functionality or resolved reported issues.\n**Action Required**: Verify fix resolves the intended problem.\n**Importance**: ${importance}/10`,
+                bugfix: `LOCAL: 🐛 **Bug Fix**\nCommit: "${commitMessage}"\n\n**Category**: Issue Resolution\n**Impact**: ${impact}\n**What Changed**: Corrected functionality or resolved reported issues.\n**Action Required**: Verify fix resolves the intended problem.\n**Importance**: ${importance}/10`,
                 
-                feature: `✨ **New Feature**\nCommit: "${commitMessage}"\n\n**Category**: Feature Addition\n**Impact**: ${impact}\n**What Changed**: New functionality or capabilities added to the system.\n**Action Required**: Test new features and update documentation.\n**Importance**: ${importance}/10`,
+                feature: `LOCAL: ✨ **New Feature**\nCommit: "${commitMessage}"\n\n**Category**: Feature Addition\n**Impact**: ${impact}\n**What Changed**: New functionality or capabilities added to the system.\n**Action Required**: Test new features and update documentation.\n**Importance**: ${importance}/10`,
                 
-                general: `📝 **Code Update**\nCommit: "${commitMessage}"\n\n**Category**: General Change\n**Impact**: ${impact}\n**What Changed**: Code modifications or improvements.\n**Action Required**: Review changes for potential impacts.\n**Importance**: ${importance}/10`
+                general: `LOCAL: 📝 **Code Update**\nCommit: "${commitMessage}"\n\n**Category**: General Change\n**Impact**: ${impact}\n**What Changed**: Code modifications or improvements.\n**Action Required**: Review changes for potential impacts.\n**Importance**: ${importance}/10`
             },
             es: {
-                security: `🔒 **Actualización de Seguridad**\nCommit: "${commitMessage}"\n\n**Categoría**: Mejora de Seguridad\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones relacionadas con seguridad que pueden afectar autenticación, autorización o protección de datos.\n**Acción Requerida**: Revisar implicaciones de seguridad y probar controles de acceso.\n**Importancia**: ${importance}/10`,
+                security: `LOCAL: 🔒 **Actualización de Seguridad**\nCommit: "${commitMessage}"\n\n**Categoría**: Mejora de Seguridad\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones relacionadas con seguridad que pueden afectar autenticación, autorización o protección de datos.\n**Acción Requerida**: Revisar implicaciones de seguridad y probar controles de acceso.\n**Importancia**: ${importance}/10`,
                 
-                'major-change': `⚠️ **Cambio Importante**\nCommit: "${commitMessage}"\n\n**Categoría**: Actualización Significativa\n**Impacto**: ${impact}\n**Qué Cambió**: Cambios estructurales o de comportamiento importantes que pueden afectar la operación del sistema.\n**Acción Requerida**: Revisar cambios cuidadosamente y coordinar con el equipo.\n**Importancia**: ${importance}/10`,
+                'major-change': `LOCAL: ⚠️ **Cambio Importante**\nCommit: "${commitMessage}"\n\n**Categoría**: Actualización Significativa\n**Impacto**: ${impact}\n**Qué Cambió**: Cambios estructurales o de comportamiento importantes que pueden afectar la operación del sistema.\n**Acción Requerida**: Revisar cambios cuidadosamente y coordinar con el equipo.\n**Importancia**: ${importance}/10`,
                 
-                bugfix: `🐛 **Corrección de Bug**\nCommit: "${commitMessage}"\n\n**Categoría**: Resolución de Problema\n**Impacto**: ${impact}\n**Qué Cambió**: Funcionalidad corregida o problemas reportados resueltos.\n**Acción Requerida**: Verificar que la corrección resuelve el problema previsto.\n**Importancia**: ${importance}/10`,
+                bugfix: `LOCAL: 🐛 **Corrección de Bug**\nCommit: "${commitMessage}"\n\n**Categoría**: Resolución de Problema\n**Impacto**: ${impact}\n**Qué Cambió**: Funcionalidad corregida o problemas reportados resueltos.\n**Acción Requerida**: Verificar que la corrección resuelve el problema previsto.\n**Importancia**: ${importance}/10`,
                 
-                feature: `✨ **Nueva Funcionalidad**\nCommit: "${commitMessage}"\n\n**Categoría**: Adición de Característica\n**Impacto**: ${impact}\n**Qué Cambió**: Nueva funcionalidad o capacidades agregadas al sistema.\n**Acción Requerida**: Probar nuevas características y actualizar documentación.\n**Importancia**: ${importance}/10`,
+                feature: `LOCAL: ✨ **Nueva Funcionalidad**\nCommit: "${commitMessage}"\n\n**Categoría**: Adición de Característica\n**Impacto**: ${impact}\n**Qué Cambió**: Nueva funcionalidad o capacidades agregadas al sistema.\n**Acción Requerida**: Probar nuevas características y actualizar documentación.\n**Importancia**: ${importance}/10`,
                 
-                general: `📝 **Actualización de Código**\nCommit: "${commitMessage}"\n\n**Categoría**: Cambio General\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones o mejoras en el código.\n**Acción Requerida**: Revisar cambios para impactos potenciales.\n**Importancia**: ${importance}/10`
+                general: `LOCAL: 📝 **Actualización de Código**\nCommit: "${commitMessage}"\n\n**Categoría**: Cambio General\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones o mejoras en el código.\n**Acción Requerida**: Revisar cambios para impactos potenciales.\n**Importancia**: ${importance}/10`
             }
         };
 
