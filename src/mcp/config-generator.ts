@@ -19,7 +19,7 @@ export class MCPConfigGenerator {
                 "claude-context-manager": {
                     "command": "node",
                     "args": [
-                        path.join(this.extensionPath, 'dist', 'mcp-server.js')
+                        path.join(this.extensionPath, 'dist', 'unified-mcp-server.js')
                     ],
                     "env": {
                         "WORKSPACE_PATH": workspaceFolder.uri.fsPath

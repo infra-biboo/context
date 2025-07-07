@@ -3,7 +3,7 @@ import { GitMonitor } from './git-monitor';
 import { FileMonitor } from './file-monitor';
 import { ContextDatabase } from '../core/database';
 import { ConfigStore } from '../core/config-store';
-import { MCPServer } from '../mcp/server';
+import { UnifiedMCPServer } from '../mcp/unified-mcp-server';
 import { Logger } from '../utils/logger';
 
 export class AutoCapture {
@@ -15,7 +15,7 @@ export class AutoCapture {
     constructor(
         private database: ContextDatabase,
         private extensionContext: vscode.ExtensionContext,
-        private mcpServer?: MCPServer
+        private mcpServer?: UnifiedMCPServer
     ) {
         this.configStore = ConfigStore.getInstance(extensionContext);
         this.setupConfigListener();

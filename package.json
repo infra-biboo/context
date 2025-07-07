@@ -55,6 +55,26 @@
       {
         "command": "claude-context.simulateProgrammaticSave",
         "title": "Claude Context: Simulate Programmatic Save"
+      },
+      {
+        "command": "claude-context.testCascadeEnrichment",
+        "title": "Test Cascade Enrichment"
+      },
+      {
+        "command": "claude-context.testMCPStatus",
+        "title": "Test MCP Client Status"
+      },
+      {
+        "command": "claude-context.testCommitEnrichment",
+        "title": "Test Commit Enrichment"
+      },
+      {
+        "command": "claude-context.testRealMCPConnection",
+        "title": "Test Real MCP Connection"
+      },
+      {
+        "command": "claude-context.configureMCP",
+        "title": "Configure MCP Settings"
       }
     ],
     "viewsContainers": {
@@ -74,6 +94,51 @@
           "type": "webview"
         }
       ]
+    },
+    "configuration": {
+      "title": "Claude Context Manager",
+      "properties": {
+        "claude-context.enableMCP": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Model Context Protocol integration with Claude Desktop (optional feature)"
+        },
+        "claude-context.enrichment.apiEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable external API for context enrichment (fallback option)"
+        },
+        "claude-context.enrichment.apiProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "deepseek",
+            "custom"
+          ],
+          "default": "deepseek",
+          "description": "External API provider for enrichment"
+        },
+        "claude-context.enrichment.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for external enrichment service"
+        },
+        "claude-context.enrichment.model": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "Model to use for external enrichment"
+        },
+        "claude-context.enrichment.customBaseURL": {
+          "type": "string",
+          "default": "",
+          "description": "Custom base URL for external API (when provider is 'custom')"
+        },
+        "claude-context.enrichment.showFallbackNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications when enrichment falls back to different strategies"
+        }
+      }
     }
   },
   "scripts": {
@@ -109,6 +174,7 @@
     "express": "^4.18.2",
     "lucide": "^0.525.0",
     "lucide-solid": "^0.525.0",
+    "openai": "^4.104.0",
     "solid-js": "^1.9.7",
     "zod": "^3.25.73"
   }

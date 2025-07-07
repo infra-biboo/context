@@ -38,7 +38,7 @@ module.exports = [
     target: 'node',
     mode: 'none', // 'production' for release, 'none' for development
     entry: {
-      'mcp-server': './src/mcp/mcp-server-standalone.ts'
+      'mcp-server': './src/mcp/unified-mcp-server.ts'
     },
     output: {
       path: path.resolve(__dirname, 'dist'),

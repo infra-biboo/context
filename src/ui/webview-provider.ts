@@ -3,7 +3,7 @@ import { ContextDatabase } from '../core/database';
 import { ConfigStore } from '../core/config-store';
 import { AutoCapture } from '../capture/auto-capture';
 import { AgentManager } from '../agents/agent-manager';
-import { MCPServer } from '../mcp/server';
+import { UnifiedMCPServer } from '../mcp/unified-mcp-server';
 import { MCPConfigGenerator } from '../mcp/config-generator';
 import { Logger } from '../utils/logger';
 import { SimpleTokenMonitor } from '../core/simple-token-monitor';
@@ -19,7 +19,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
         private readonly configStore: ConfigStore,
         private readonly autoCapture: AutoCapture,
         private readonly agentManager: AgentManager,
-        private readonly mcpServer: MCPServer,
+        private readonly mcpServer: UnifiedMCPServer | undefined,
         private readonly mcpConfigGenerator: MCPConfigGenerator,
         private readonly tokenMonitor: SimpleTokenMonitor
     ) {
@@ -123,7 +123,7 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 const contexts = await this.database.getContexts();
                 const agents = await this.agentManager.getAllAgents();
                 const databaseConfig = this.database.getDatabaseConfig();
-                const mcpStatus = this.mcpServer.getConnectionInfo();
+                const mcpStatus = this.mcpServer ? { connected: this.mcpServer.isServerRunning(), server: 'unified' } : { connected: false, server: 'none' };
                 const onboardingCompleted = this.configStore.getOnboardingCompleted();
                 const tokenUsage = this.tokenMonitor.getCurrentUsage();
                 const config = this.configStore.getConfig();
@@ -212,17 +212,21 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleMcpActions(action: string, payload: any): Promise<any> {
+        if (!this.mcpServer) {
+            return { error: 'MCP Server not available' };
+        }
+        
         switch (action) {
             case 'start':
                 await this.mcpServer.start();
                 vscode.window.showInformationMessage('MCP Server started.');
-                return this.mcpServer.getConnectionInfo();
+                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
             case 'stop':
                 await this.mcpServer.stop();
                 vscode.window.showInformationMessage('MCP Server stopped.');
-                return this.mcpServer.getConnectionInfo();
+                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
             case 'getStatus':
-                return this.mcpServer.getConnectionInfo();
+                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
             default:
                 throw new Error(`Unknown MCP action: ${action}`);
         }

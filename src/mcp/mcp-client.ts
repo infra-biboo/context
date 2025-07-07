@@ -1,28 +1,36 @@
 import { Logger } from '../utils/logger';
 import { ConfigStore } from '../core/config-store';
-import { MCPServer } from './server';
-
-interface MCPResponse {
-    content: Array<{
-        type: string;
-        text: string;
-    }>;
-}
+import { CascadeEnrichmentService } from './cascade-enrichment-service';
+import { RealMCPClient } from './real-mcp-client';
+import * as vscode from 'vscode';
 
 /**
- * Internal MCP Client for enriching context with Claude
- * This client communicates with the MCP server to generate intelligent context
+ * Modernized MCP Client - Replaces all simulated functionality
+ * 
+ * This client now provides:
+ * - Real MCP communication (no more simulations)
+ * - Cascade enrichment (Claude → API → Local)
+ * - Proper error handling and fallbacks
+ * - Bilingual support (Spanish/English)
  */
 export class MCPClient {
     private isConnected: boolean = false;
     private configStore: ConfigStore;
+    private enrichmentService: CascadeEnrichmentService;
+    private realMCPClient?: RealMCPClient;
 
     constructor(
-        private extensionContext: any,
-        private mcpServer?: MCPServer
+        private extensionContext: vscode.ExtensionContext
     ) {
         this.configStore = ConfigStore.getInstance(extensionContext);
-        Logger.info(`MCPClient created. MCPServer available: ${!!mcpServer}`);
+        this.enrichmentService = new CascadeEnrichmentService(extensionContext);
+        
+        // Initialize real MCP client if MCP is enabled
+        if (this.isMCPEnabled()) {
+            this.realMCPClient = new RealMCPClient();
+        }
+        
+        Logger.info(`MCPClient created. Real MCP: ${!!this.realMCPClient}`);
     }
 
     /**
@@ -33,6 +41,14 @@ export class MCPClient {
     }
 
     /**
+     * Check if MCP is enabled in settings
+     */
+    private isMCPEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration('claude-context');
+        return config.get('enableMCP', false);
+    }
+
+    /**
      * Connect to the MCP server
      */
     async connect(): Promise<void> {
@@ -40,16 +56,24 @@ export class MCPClient {
             return;
         }
 
-        if (this.mcpServer) {
-            this.isConnected = true;
-            Logger.info('MCP Client connected to existing server');
-        } else {
-            Logger.warn('No MCP Server instance available');
+        try {
+            if (this.realMCPClient) {
+                await this.realMCPClient.connect();
+                this.isConnected = true;
+                Logger.info('✅ MCP Client connected to real MCP server');
+            } else {
+                // No MCP server - running in standalone mode
+                this.isConnected = true;
+                Logger.info('✅ MCP Client initialized in standalone mode (no MCP server)');
+            }
+        } catch (error) {
+            Logger.warn('Failed to connect to MCP server, continuing in standalone mode', error);
+            this.isConnected = true; // Still allow enrichment via cascade service
         }
     }
 
     /**
-     * Enrich a git commit context
+     * Enrich a git commit context using cascade strategy
      */
     async enrichCommitContext(commitMessage: string, importance: number): Promise<string | null> {
         if (!this.isConnected) {
@@ -57,49 +81,17 @@ export class MCPClient {
         }
 
         const language = this.getCurrentLanguage();
-        const languagePrompts = {
-            es: `Analiza este commit de git y genera una entrada de contexto concisa pero detallada en español:
-
-Mensaje del commit: "${commitMessage}"
-Nivel de importancia: ${importance}/10
-
-Genera un contexto que incluya:
-1. Qué se cambió (sé específico)
-2. Por qué podría ser importante
-3. Impacto potencial en el sistema
-4. Cualquier riesgo o cosa a tener en cuenta
-
-Manténlo bajo 150 palabras y enfócate en lo que importa para referencia futura.`,
-            
-            en: `Analyze this git commit and generate a concise but detailed context entry in English:
-
-Commit message: "${commitMessage}"
-Importance level: ${importance}/10
-
-Generate a context that includes:
-1. What was changed (be specific)
-2. Why it might be important
-3. Potential impact on the system
-4. Any risks or things to watch out for
-
-Keep it under 150 words and focus on what matters for future reference.`
-        };
-
-        const prompt = languagePrompts[language];
+        const content = this.formatCommitForEnrichment(commitMessage, importance, language);
 
         try {
-            // Try to use MCP enrichment first, fallback to local if it fails
-            const mcpResult = await this.tryMCPEnrichment(prompt);
-            if (mcpResult) {
-                return mcpResult;
-            }
-            
-            // Fallback to local enrichment
-            Logger.info('MCP enrichment failed, using local enrichment');
-            return this.generateLocalEnrichment(commitMessage, importance, language);
+            // Use cascade enrichment service (Claude → API → Local)
+            const enrichedContent = await this.enrichmentService.enrichContext(content, importance);
+            Logger.info('✅ Commit context enriched successfully');
+            return enrichedContent;
         } catch (error) {
-            Logger.error('Failed to enrich commit context:', error as Error);
-            return this.generateLocalEnrichment(commitMessage, importance, language);
+            Logger.error('Failed to enrich commit context', error);
+            // Final fallback to simple local enrichment
+            return this.generateSimpleLocalEnrichment(commitMessage, importance, language);
         }
     }
 
@@ -116,52 +108,21 @@ Keep it under 150 words and focus on what matters for future reference.`
         }
 
         const language = this.getCurrentLanguage();
-        const languagePrompts = {
-            es: `Analiza este cambio de archivo y genera una entrada de contexto concisa en español:
-
-Archivo: ${fileName}
-Ruta: ${filePath}
-Tipo de cambio: ${changeType}
-
-Basándote en el tipo de archivo y ubicación, genera un contexto que explique:
-1. La importancia de este archivo en el proyecto
-2. Qué tipo de cambio representa
-3. Impactos potenciales o dependencias
-4. Cualquier consideración de configuración o despliegue
-
-Manténlo bajo 100 palabras y sé específico sobre las implicaciones técnicas.`,
-
-            en: `Analyze this file change and generate a concise context entry in English:
-
-File: ${fileName}
-Path: ${filePath}
-Change type: ${changeType}
-
-Based on the file type and location, generate a context that explains:
-1. The significance of this file in the project
-2. What kind of change this represents
-3. Potential impacts or dependencies
-4. Any configuration or deployment considerations
-
-Keep it under 100 words and be specific about the technical implications.`
-        };
-
-        const prompt = languagePrompts[language];
+        const content = this.formatFileChangeForEnrichment(fileName, changeType, filePath, language);
+        const importance = this.calculateFileImportance(fileName, changeType);
 
         try {
-            const response = await this.callMCPTool('save_summarized_context', { summary: prompt });
-            if (response) {
-                return this.extractContextFromResponse(response);
-            }
-            return null;
+            const enrichedContent = await this.enrichmentService.enrichContext(content, importance);
+            Logger.info('✅ File context enriched successfully');
+            return enrichedContent;
         } catch (error) {
-            Logger.error('Failed to enrich file context:', error as Error);
-            return null;
+            Logger.error('Failed to enrich file context', error);
+            return this.generateSimpleLocalEnrichment(content, importance, language);
         }
     }
 
     /**
-     * Detect and enrich "eureka" moments
+     * Enrich "eureka" moments with high priority
      */
     async enrichEurekaContext(originalContent: string, contextType: string): Promise<string | null> {
         if (!this.isConnected) {
@@ -169,187 +130,205 @@ Keep it under 100 words and be specific about the technical implications.`
         }
 
         const language = this.getCurrentLanguage();
-        const languagePrompts = {
-            es: `¡Momento Eureka detectado! Genera una entrada de contexto enriquecida en español:
+        const content = this.formatEurekaForEnrichment(originalContent, contextType, language);
+        const importance = 9; // Eureka moments are always high importance
 
-Contenido original: "${originalContent}"
-Tipo de contexto: ${contextType}
+        try {
+            const enrichedContent = await this.enrichmentService.enrichContext(content, importance);
+            Logger.info('✅ Eureka context enriched successfully');
+            return `🎉 MOMENTO EUREKA: ${enrichedContent}`;
+        } catch (error) {
+            Logger.error('Failed to enrich eureka context', error);
+            return this.generateSimpleLocalEnrichment(originalContent, importance, language);
+        }
+    }
 
-Esto representa un avance o realización importante. Genera un contexto que:
-1. Capture la esencia del descubrimiento
-2. Explique por qué esto es significativo
-3. Note cualquier problema que se resolvió
-4. Sugiera próximos pasos o implicaciones
+    /**
+     * Add context directly via MCP (if available)
+     */
+    async addContextViaMCP(content: string, type: string, importance: number): Promise<string | null> {
+        if (!this.realMCPClient || !this.realMCPClient.isConnected()) {
+            Logger.warn('MCP not available for adding context');
+            return null;
+        }
 
-Hazlo memorable y accionable. Máximo 150 palabras.`,
+        try {
+            const result = await this.realMCPClient.addContext(content, type, importance);
+            Logger.info('✅ Context added via MCP');
+            return result;
+        } catch (error) {
+            Logger.error('Failed to add context via MCP', error);
+            return null;
+        }
+    }
 
-            en: `Eureka moment detected! Generate an enriched context entry in English:
+    /**
+     * Get context from MCP server (if available)
+     */
+    async getContextViaMCP(limit: number = 10, type?: string): Promise<string | null> {
+        if (!this.realMCPClient || !this.realMCPClient.isConnected()) {
+            Logger.warn('MCP not available for getting context');
+            return null;
+        }
 
-Original content: "${originalContent}"
-Context type: ${contextType}
+        try {
+            const result = await this.realMCPClient.getContext(limit, type);
+            Logger.info('✅ Context retrieved via MCP');
+            return result;
+        } catch (error) {
+            Logger.error('Failed to get context via MCP', error);
+            return null;
+        }
+    }
 
-This represents a breakthrough or important realization. Generate a context that:
-1. Captures the essence of the discovery
-2. Explains why this is significant
-3. Notes any problems that were solved
-4. Suggests next steps or implications
+    /**
+     * Format commit message for enrichment
+     */
+    private formatCommitForEnrichment(commitMessage: string, importance: number, language: 'en' | 'es'): string {
+        const templates = {
+            en: `Git Commit Analysis:
+Message: "${commitMessage}"
+Importance: ${importance}/10
 
-Make it memorable and actionable. Maximum 150 words.`
+Please analyze this commit and provide context about what changed, why it's important, potential impacts, and any risks to watch out for.`,
+            
+            es: `Análisis de Commit Git:
+Mensaje: "${commitMessage}"
+Importancia: ${importance}/10
+
+Por favor analiza este commit y proporciona contexto sobre qué cambió, por qué es importante, impactos potenciales, y cualquier riesgo a considerar.`
+        };
+        
+        return templates[language];
+    }
+
+    /**
+     * Format file change for enrichment
+     */
+    private formatFileChangeForEnrichment(fileName: string, changeType: string, filePath: string, language: 'en' | 'es'): string {
+        const templates = {
+            en: `File Change Analysis:
+File: ${fileName}
+Path: ${filePath}
+Change: ${changeType}
+
+Please analyze the significance of this file change, its potential impacts, and any considerations based on the file type and location.`,
+            
+            es: `Análisis de Cambio de Archivo:
+Archivo: ${fileName}
+Ruta: ${filePath}
+Cambio: ${changeType}
+
+Por favor analiza la importancia de este cambio de archivo, sus impactos potenciales, y cualquier consideración basada en el tipo de archivo y ubicación.`
+        };
+        
+        return templates[language];
+    }
+
+    /**
+     * Format eureka moment for enrichment
+     */
+    private formatEurekaForEnrichment(originalContent: string, contextType: string, language: 'en' | 'es'): string {
+        const templates = {
+            en: `Eureka Moment Detected:
+Content: "${originalContent}"
+Type: ${contextType}
+
+This represents a breakthrough or important realization. Please capture the essence of the discovery, explain why it's significant, and suggest next steps.`,
+            
+            es: `Momento Eureka Detectado:
+Contenido: "${originalContent}"
+Tipo: ${contextType}
+
+Esto representa un avance o realización importante. Por favor captura la esencia del descubrimiento, explica por qué es significativo, y sugiere próximos pasos.`
+        };
+        
+        return templates[language];
+    }
+
+    /**
+     * Calculate file importance based on type and change
+     */
+    private calculateFileImportance(fileName: string, changeType: string): number {
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        let importance = 5; // Default
+        
+        // High importance files
+        if (['ts', 'js', 'py', 'java', 'c', 'cpp'].includes(ext || '')) {
+            importance += 1;
+        }
+        
+        // Configuration files
+        if (['json', 'yaml', 'yml', 'toml', 'ini', 'env'].includes(ext || '')) {
+            importance += 2;
+        }
+        
+        // Package/dependency files
+        if (['package.json', 'requirements.txt', 'Cargo.toml', 'pom.xml'].includes(fileName)) {
+            importance += 3;
+        }
+        
+        // Change type impact
+        if (changeType === 'deleted') {
+            importance += 2;
+        } else if (changeType === 'created') {
+            importance += 1;
+        }
+        
+        return Math.min(importance, 10);
+    }
+
+    /**
+     * Generate simple local enrichment as final fallback
+     */
+    private generateSimpleLocalEnrichment(content: string, importance: number, language: 'en' | 'es'): string {
+        const lowerContent = content.toLowerCase();
+        
+        // Detect patterns
+        let category = 'general';
+        if (/security|auth|token|password/.test(lowerContent)) {
+            category = 'security';
+        } else if (/fix|bug|error|issue/.test(lowerContent)) {
+            category = 'bugfix';
+        } else if (/feat|feature|new|add/.test(lowerContent)) {
+            category = 'feature';
+        } else if (/refactor|optimize|improve/.test(lowerContent)) {
+            category = 'refactor';
+        }
+
+        const templates = {
+            en: {
+                security: `🔒 **Security Update** (${importance}/10)\nSecurity-related changes detected. Review authentication, authorization, and data protection implications.`,
+                bugfix: `🐛 **Bug Fix** (${importance}/10)\nIssue resolution detected. Verify the fix resolves the intended problem without side effects.`,
+                feature: `✨ **New Feature** (${importance}/10)\nNew functionality detected. Test the feature and update documentation as needed.`,
+                refactor: `🔧 **Code Refactoring** (${importance}/10)\nCode improvement detected. Ensure behavior remains consistent after changes.`,
+                general: `📝 **Code Change** (${importance}/10)\nCode modification detected. Review changes for potential impacts.`
+            },
+            es: {
+                security: `🔒 **Actualización de Seguridad** (${importance}/10)\nCambios relacionados con seguridad detectados. Revisar implicaciones de autenticación, autorización y protección de datos.`,
+                bugfix: `🐛 **Corrección de Bug** (${importance}/10)\nResolución de problema detectada. Verificar que la corrección resuelve el problema sin efectos secundarios.`,
+                feature: `✨ **Nueva Funcionalidad** (${importance}/10)\nNueva funcionalidad detectada. Probar la característica y actualizar documentación según sea necesario.`,
+                refactor: `🔧 **Refactorización de Código** (${importance}/10)\nMejora de código detectada. Asegurar que el comportamiento se mantiene consistente después de los cambios.`,
+                general: `📝 **Cambio de Código** (${importance}/10)\nModificación de código detectada. Revisar cambios para impactos potenciales.`
+            }
         };
 
-        const prompt = languagePrompts[language];
-
-        try {
-            const response = await this.callMCPTool('save_summarized_context', { summary: prompt });
-            if (response) {
-                return this.extractContextFromResponse(response);
-            }
-            return null;
-        } catch (error) {
-            Logger.error('Failed to enrich eureka context:', error as Error);
-            return null;
-        }
-    }
-
-    /**
-     * Extract context from MCP response
-     */
-    private extractContextFromResponse(response: MCPResponse): string | null {
-        if (response.content && response.content.length > 0) {
-            return response.content[0].text;
-        }
-        return null;
-    }
-
-    /**
-     * Try to enrich using MCP server (if available)
-     */
-    private async tryMCPEnrichment(prompt: string): Promise<string | null> {
-        try {
-            if (!this.mcpServer) {
-                Logger.warn('No MCP Server available for enrichment');
-                return null;
-            }
-            
-            Logger.info('Attempting MCP enrichment...');
-            
-            // For now, simulate MCP enrichment with a proper response
-            // This will be replaced with actual MCP server calls later
-            const commitMessage = prompt.match(/Commit message: "(.+?)"/)?.[1] || 'Unknown commit';
-            const importance = prompt.match(/Importance level: (\d+)/)?.[1] || '5';
-            
-            const enrichedResponse = `MCP: 🤖 **AI-Enhanced Context**
-
-**Commit**: ${commitMessage}
-**Importance**: ${importance}/10
-
-This commit appears to be security-related, indicating a critical authentication vulnerability was addressed. This type of change typically requires:
-
-1. **Immediate attention** - Security fixes are high priority
-2. **Testing verification** - Ensure the fix doesn't break existing functionality
-3. **Documentation update** - Update security protocols if needed
-4. **Team notification** - Inform relevant stakeholders about the security patch
-
-*Generated through MCP server integration*`;
-            
-            Logger.info('MCP enrichment completed');
-            return enrichedResponse;
-        } catch (error) {
-            Logger.error('MCP enrichment failed:', error as Error);
-            return null;
-        }
-    }
-
-    /**
-     * Call MCP tool (simplified implementation)
-     */
-    private async callMCPTool(toolName: string, args: any): Promise<MCPResponse | null> {
-        try {
-            Logger.info(`Simulating MCP tool call: ${toolName}`);
-            
-            // For now, return a simulated enriched response
-            return {
-                content: [{
-                    type: 'text',
-                    text: `MCP: 🤖 **Enhanced via ${toolName}**\n\n${args.summary}\n\n*This context was processed by the MCP server*`
-                }]
-            };
-        } catch (error) {
-            Logger.error(`Failed to call MCP tool ${toolName}:`, error as Error);
-            return null;
-        }
+        return `📝 Local: ${templates[language][category as keyof typeof templates[typeof language]] || templates[language].general}`;
     }
 
     /**
      * Disconnect from MCP server
      */
-    disconnect(): void {
-        this.isConnected = false;
-        Logger.info('MCP Client disconnected');
-    }
-
-    /**
-     * Generate local enrichment (without MCP for now)
-     */
-    private generateLocalEnrichment(commitMessage: string, importance: number, language: 'en' | 'es'): string {
-        const lowerMessage = commitMessage.toLowerCase();
-        
-        // Detect patterns and generate enriched context
-        const patterns = {
-            security: /security|auth|token|password|encrypt|vulnerability/i,
-            performance: /performance|optimize|speed|fast|slow|memory|cpu/i,
-            bug: /fix|bug|error|issue|problem|crash/i,
-            feature: /feat|feature|add|implement|new/i,
-            refactor: /refactor|restructure|cleanup|reorganize/i,
-            breaking: /breaking|major|significant|important/i
-        };
-
-        let category = 'general';
-        let impact = 'Medium';
-        
-        if (patterns.security.test(lowerMessage)) {
-            category = 'security';
-            impact = 'High';
-        } else if (patterns.breaking.test(lowerMessage)) {
-            category = 'major-change';
-            impact = 'High';
-        } else if (patterns.performance.test(lowerMessage)) {
-            category = 'performance';
-            impact = 'Medium';
-        } else if (patterns.feature.test(lowerMessage)) {
-            category = 'feature';
-            impact = 'Medium';
-        } else if (patterns.bug.test(lowerMessage)) {
-            category = 'bugfix';
-            impact = 'Medium';
-        }
-
-        const templates = {
-            en: {
-                security: `LOCAL: 🔒 **Security Update**\nCommit: "${commitMessage}"\n\n**Category**: Security Enhancement\n**Impact**: ${impact}\n**What Changed**: Security-related modifications that may affect authentication, authorization, or data protection.\n**Action Required**: Review security implications and test access controls.\n**Importance**: ${importance}/10`,
-                
-                'major-change': `LOCAL: ⚠️ **Major Change**\nCommit: "${commitMessage}"\n\n**Category**: Significant Update\n**Impact**: ${impact}\n**What Changed**: Important structural or behavioral changes that may affect system operation.\n**Action Required**: Review changes carefully and coordinate with team.\n**Importance**: ${importance}/10`,
-                
-                bugfix: `LOCAL: 🐛 **Bug Fix**\nCommit: "${commitMessage}"\n\n**Category**: Issue Resolution\n**Impact**: ${impact}\n**What Changed**: Corrected functionality or resolved reported issues.\n**Action Required**: Verify fix resolves the intended problem.\n**Importance**: ${importance}/10`,
-                
-                feature: `LOCAL: ✨ **New Feature**\nCommit: "${commitMessage}"\n\n**Category**: Feature Addition\n**Impact**: ${impact}\n**What Changed**: New functionality or capabilities added to the system.\n**Action Required**: Test new features and update documentation.\n**Importance**: ${importance}/10`,
-                
-                general: `LOCAL: 📝 **Code Update**\nCommit: "${commitMessage}"\n\n**Category**: General Change\n**Impact**: ${impact}\n**What Changed**: Code modifications or improvements.\n**Action Required**: Review changes for potential impacts.\n**Importance**: ${importance}/10`
-            },
-            es: {
-                security: `LOCAL: 🔒 **Actualización de Seguridad**\nCommit: "${commitMessage}"\n\n**Categoría**: Mejora de Seguridad\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones relacionadas con seguridad que pueden afectar autenticación, autorización o protección de datos.\n**Acción Requerida**: Revisar implicaciones de seguridad y probar controles de acceso.\n**Importancia**: ${importance}/10`,
-                
-                'major-change': `LOCAL: ⚠️ **Cambio Importante**\nCommit: "${commitMessage}"\n\n**Categoría**: Actualización Significativa\n**Impacto**: ${impact}\n**Qué Cambió**: Cambios estructurales o de comportamiento importantes que pueden afectar la operación del sistema.\n**Acción Requerida**: Revisar cambios cuidadosamente y coordinar con el equipo.\n**Importancia**: ${importance}/10`,
-                
-                bugfix: `LOCAL: 🐛 **Corrección de Bug**\nCommit: "${commitMessage}"\n\n**Categoría**: Resolución de Problema\n**Impacto**: ${impact}\n**Qué Cambió**: Funcionalidad corregida o problemas reportados resueltos.\n**Acción Requerida**: Verificar que la corrección resuelve el problema previsto.\n**Importancia**: ${importance}/10`,
-                
-                feature: `LOCAL: ✨ **Nueva Funcionalidad**\nCommit: "${commitMessage}"\n\n**Categoría**: Adición de Característica\n**Impacto**: ${impact}\n**Qué Cambió**: Nueva funcionalidad o capacidades agregadas al sistema.\n**Acción Requerida**: Probar nuevas características y actualizar documentación.\n**Importancia**: ${importance}/10`,
-                
-                general: `LOCAL: 📝 **Actualización de Código**\nCommit: "${commitMessage}"\n\n**Categoría**: Cambio General\n**Impacto**: ${impact}\n**Qué Cambió**: Modificaciones o mejoras en el código.\n**Acción Requerida**: Revisar cambios para impactos potenciales.\n**Importancia**: ${importance}/10`
+    async disconnect(): Promise<void> {
+        try {
+            if (this.realMCPClient) {
+                await this.realMCPClient.disconnect();
             }
-        };
-
-        return templates[language][category as keyof typeof templates[typeof language]] || templates[language].general;
+            this.isConnected = false;
+            Logger.info('MCP Client disconnected');
+        } catch (error) {
+            Logger.error('Error disconnecting MCP client', error);
+        }
     }
 
     /**
@@ -367,9 +346,21 @@ This commit appears to be security-related, indicating a critical authentication
         const eurekaPatterns = [
             'eureka', 'finally', 'solved', 'fixed the issue', 
             'breakthrough', 'found it', 'that\'s it', 'got it',
-            'problema resuelto', 'solucionado', 'encontré'
+            'problema resuelto', 'solucionado', 'encontré',
+            '¡eureka!', 'por fin', 'resuelto'
         ];
 
         return eurekaPatterns.some(pattern => lowerContent.includes(pattern));
+    }
+
+    /**
+     * Get connection status
+     */
+    getStatus(): { connected: boolean; mcpAvailable: boolean; enrichmentAvailable: boolean } {
+        return {
+            connected: this.isConnected,
+            mcpAvailable: !!this.realMCPClient?.isConnected(),
+            enrichmentAvailable: true // Cascade enrichment always available
+        };
     }
 }

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { ContextDatabase } from '../core/database';
 import { Logger } from '../utils/logger';
 import { MCPClient } from '../mcp/mcp-client';
-import { MCPServer } from '../mcp/server';
+import { UnifiedMCPServer } from '../mcp/unified-mcp-server';
 import { ConfigStore } from '../core/config-store';
 
 export class GitMonitor {
@@ -17,10 +17,10 @@ export class GitMonitor {
         private database: ContextDatabase,
         private workspaceRoot: string,
         private extensionContext?: any,
-        private mcpServer?: MCPServer
+        private mcpServer?: UnifiedMCPServer
     ) {
         if (extensionContext) {
-            this.mcpClient = new MCPClient(extensionContext, mcpServer);
+            this.mcpClient = new MCPClient(extensionContext);
             Logger.info(`GitMonitor initialized with MCPClient. MCPServer available: ${!!mcpServer}`);
         } else {
             Logger.warn('GitMonitor initialized without extension context - MCP disabled');

@@ -9,11 +9,12 @@ import { ContextDatabase } from './core/database';
 import { ConfigStore } from './core/config-store';
 import { AutoCapture } from './capture/auto-capture';
 import { AgentManager } from './agents/agent-manager';
-import { MCPServer } from './mcp/server';
+import { UnifiedMCPServer } from './mcp/unified-mcp-server';
 import { MCPConfigGenerator } from './mcp/config-generator';
 import { Logger } from './utils/logger';
 import { SimpleTokenMonitor } from './core/simple-token-monitor';
 import { registerTokenCommands } from './commands/token-commands';
+import { registerMCPTestCommands } from './commands/mcp-test-commands';
 
 export async function activate(context: vscode.ExtensionContext) {
     Logger.initialize();
@@ -44,24 +45,40 @@ export async function activate(context: vscode.ExtensionContext) {
     const agentManager = new AgentManager(database, configStore);
     await agentManager.initialize();
     
-    // Initialize MCP server with agent manager
-    const mcpServer = new MCPServer(database, agentManager);
+    // Check if MCP should be enabled
+    const shouldEnableMCP = UnifiedMCPServer.shouldStartMCP();
+    Logger.info(`MCP Integration: ${shouldEnableMCP ? 'Enabled' : 'Disabled'}`);
+    
+    // Initialize MCP server only if enabled
+    let mcpServer: UnifiedMCPServer | undefined;
+    if (shouldEnableMCP) {
+        mcpServer = new UnifiedMCPServer(database, agentManager, context);
+        try {
+            await mcpServer.start();
+            Logger.info('✅ Unified MCP Server started successfully');
+        } catch (error) {
+            Logger.error('❌ Failed to start MCP Server:', error instanceof Error ? error : new Error(String(error)));
+            vscode.window.showWarningMessage(
+                'MCP Server failed to start. Context Manager will work in standalone mode.',
+                'Settings'
+            ).then(selection => {
+                if (selection === 'Settings') {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'claude-context.enableMCP');
+                }
+            });
+        }
+    } else {
+        Logger.info('✅ Context Manager running in standalone mode (MCP disabled)');
+    }
+    
     const mcpConfigGenerator = new MCPConfigGenerator(context.extensionPath);
     
-    // Initialize auto-capture system with MCP server
+    // Initialize auto-capture system (works independently of MCP)
     const autoCapture = new AutoCapture(contextManager.getDatabase(), context, mcpServer);
     await autoCapture.initialize();
     
     // Initialize simple token monitor
     const tokenMonitor = new SimpleTokenMonitor();
-    
-    // Start MCP server
-    try {
-        await mcpServer.start();
-        Logger.info('MCP Server started successfully');
-    } catch (error) {
-        Logger.error('Failed to start MCP Server:', error instanceof Error ? error : new Error(String(error)));
-    }
     
     // Register webview provider
     const webviewProvider = new ContextWebviewProvider(
@@ -88,13 +105,16 @@ export async function activate(context: vscode.ExtensionContext) {
     registerGitTestCommands(context);
     registerMCPCommands(context);
     registerTokenCommands(context, tokenMonitor);
+    registerMCPTestCommands(context);
     
     // Add auto-capture, agent manager, database, token monitor, and MCP server to disposables
     context.subscriptions.push(autoCapture);
     context.subscriptions.push(agentManager);
     context.subscriptions.push({
         dispose: async () => {
-            mcpServer.stop();
+            if (mcpServer) {
+                await mcpServer.stop();
+            }
             await database.close();
             tokenMonitor.removeAllListeners();
         }
