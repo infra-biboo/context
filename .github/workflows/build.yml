@@ -1,4 +1,4 @@
-# .github/workflows/build.yml
+# .github/workflows/build-and-package.yml
 name: Build & Package Multi-Platform VSIX
 
 on:
@@ -8,46 +8,42 @@ on:
     branches: [ main ]
 
 jobs:
-  build-binaries:
-    name: Build sqlite3 on ${{ matrix.os }}-${{ matrix.arch }}
+  # 1) Build x64 binaries on GitHub-hosted runners (Linux, Windows, macOS Intel)
+  build-binaries-x64:
+    name: Build sqlite3 on ${{ matrix.os }}-x64
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        arch: [x64, arm64]
-
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v20 🟢
+      - name: Setup Node.js v20
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
-      - name: Setup Python (para node-gyp)
+      - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
+          python-version: '3.x'
 
-      - name: Instalar build tools en Linux
-        if: runner.os == 'Linux'
+      - name: Install build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            xcode-select --install || true
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            choco install python --version=3.9.0 -y
+          fi
 
-      - name: Instalar Xcode CLI en macOS
-        if: runner.os == 'macOS'
-        run: xcode-select --install || true
-
-      - name: (Opcional) Asegurar Python en Windows
-        if: runner.os == 'Windows'
-        run: choco install python --version=3.9.0 -y
-
-      - name: Instalar dependencias (postinstall compila el .node)
+      - name: Install dependencies and build native binding
         run: npm ci
 
-      - name: Copiar binding compilado a binaries/
+      - name: Copy compiled .node to binaries/
         run: |
           mkdir -p binaries
           node -e "
@@ -56,35 +52,80 @@ jobs:
                   os = require('os');
             const plat = os.platform(), arch = os.arch();
             const src = path.join('node_modules','@vscode','sqlite3','build','Release','vscode-sqlite3.node');
-            const dst = path.join('binaries',`vscode-sqlite3-${plat}-${arch}.node`);
+            const dst = path.join('binaries', \`vscode-sqlite3-\${plat}-\${arch}.node\`);
             fs.copyFileSync(src, dst);
           "
 
-      - name: Subir artefacto de binarios
+      - name: Upload x64 binaries
         uses: actions/upload-artifact@v4
         with:
-          name: sqlite3-binaries-${{ matrix.os }}-${{ matrix.arch }}
+          name: sqlite3-binaries-${{ matrix.os }}-x64
           path: binaries/
 
-  package-vsix:
-    name: Package VSIX
-    runs-on: ubuntu-latest
-    needs: build-binaries
+  # 2) Build arm64 macOS binary on a self-hosted ARM Mac runner
+  build-binaries-macos-arm64:
+    name: Build sqlite3 on macOS-arm64
+    runs-on: [self-hosted, macos, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Descargar artefactos de binarios
+      - name: Setup Node.js v20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Xcode CLI
+        run: xcode-select --install || true
+
+      - name: Install dependencies and build native binding
+        run: npm ci
+
+      - name: Copy compiled .node to binaries/
+        run: |
+          mkdir -p binaries
+          node -e "
+            const fs = require('fs'),
+                  path = require('path'),
+                  os = require('os');
+            const plat = os.platform(), arch = os.arch();
+            const src = path.join('node_modules','@vscode','sqlite3','build','Release','vscode-sqlite3.node');
+            const dst = path.join('binaries', \`vscode-sqlite3-\${plat}-\${arch}.node\`);
+            fs.copyFileSync(src, dst);
+          "
+
+      - name: Upload arm64 macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-arm64
+          path: binaries/
+
+  # 3) Collect all binaries and produce the VSIX
+  package-vsix:
+    name: Download binaries & package VSIX
+    runs-on: ubuntu-latest
+    needs: [build-binaries-x64, build-binaries-macos-arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all binaries
         uses: actions/download-artifact@v4
         with:
           path: binaries/
 
-      - name: Instalar deps de producción
+      - name: Install production dependencies
         run: npm ci --omit=dev
 
-      - name: Empaquetar VSIX
+      - name: Package VSIX
         run: npx vsce package --out claude-context-manager.vsix
 
-      - name: Subir VSIX
+      - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
           name: claude-context-manager.vsix
