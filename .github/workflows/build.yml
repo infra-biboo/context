@@ -1,0 +1,76 @@
+name: Build & Package Multi-Platform VSIX
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-binaries:
+    name: Build sqlite3 binary on ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        arch: [x64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+
+      - name: Install dependencies (triggers `postinstall`)
+        run: npm ci
+
+      - name: Copy native .node to binaries folder
+        run: |
+          mkdir -p binaries
+          node -e "
+            const fs = require('fs'),
+                  path = require('path'),
+                  os = require('os');
+            const plat = os.platform();        // 'linux', 'darwin' or 'win32'
+            const arch = os.arch();            // 'x64' or 'arm64'
+            const src  = path.join(process.cwd(),
+                                   'node_modules','@vscode','sqlite3',
+                                   'build','Release','vscode-sqlite3.node');
+            const dst  = path.join(process.cwd(),
+                                   'binaries',
+                                   `vscode-sqlite3-${plat}-${arch}.node`);
+            fs.copyFileSync(src, dst);
+          "
+
+      - name: Upload binaries artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: sqlite3-binaries-${{ matrix.os }}-${{ matrix.arch }}
+          path: binaries/
+
+  package-vsix:
+    name: Download binaries & package VSIX
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all binaries artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: binaries/
+
+      - name: Install production deps
+        run: npm ci --omit=dev
+
+      - name: Package VSIX
+        run: npx vsce package --out claude-context-manager-${{ github.ref_name || 'dev' }}.vsix
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v3
+        with:
+          name: claude-context-manager.vsix
+          path: claude-context-manager-*.vsix

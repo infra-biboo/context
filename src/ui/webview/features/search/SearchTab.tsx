@@ -123,7 +123,7 @@ const SearchTab: Component = () => {
                     </span>
                   </div>
                   <div class="context-content">
-                    <p>{context.content?.substring(0, 200) || 'No content available'}...</p>
+                    <p>{context.content || 'No content available'}</p>
                   </div>
                   <div class="context-tags">
                     <For each={context.tags || []}>

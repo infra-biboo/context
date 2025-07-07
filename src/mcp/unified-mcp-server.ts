@@ -247,12 +247,22 @@ export class UnifiedMCPServer {
             // Initialize services
             await this.initializeServices();
             
-            // Connect MCP server
-            await this.server.connect(this.transport);
-            this.isRunning = true;
+            // Always use stdio transport for MCP compatibility
+            // but handle the "already started" error gracefully
+            try {
+                await this.server.connect(this.transport);
+            } catch (error: any) {
+                if (error.message?.includes('already started')) {
+                    // Transport already connected, that's fine
+                    Logger.info('MCP Transport already connected, continuing...');
+                } else {
+                    throw error;
+                }
+            }
             
+            this.isRunning = true;
             Logger.info('✅ Unified MCP Server started successfully');
-            console.log('Context Manager MCP Server ready for Claude Desktop');
+            console.log('Context Manager MCP Server ready for Claude Desktop, Cline, and VS Code');
         } catch (error) {
             Logger.error('❌ Failed to start MCP Server', error);
             throw error;
@@ -280,11 +290,15 @@ export class UnifiedMCPServer {
         }
 
         try {
-            await this.transport.close();
+            if (this.transport) {
+                await this.transport.close();
+            }
             this.isRunning = false;
             Logger.info('Unified MCP Server stopped successfully');
         } catch (error) {
             Logger.error('Error stopping MCP Server', error);
+            // Force state reset even if stop fails
+            this.isRunning = false;
         }
     }
 
@@ -325,6 +339,6 @@ export class UnifiedMCPServer {
 
     public static shouldStartMCP(): boolean {
         const config = vscode.workspace.getConfiguration('claude-context');
-        return config.get('enableMCP', false);
+        return config.get('enableMCP', true);
     }
 }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as os from 'os';
 import { DatabaseAdapter } from './database/database-adapter';
 import { DatabaseFactory } from './database/database-factory';
 import { DatabaseConfig, SearchOptions, VectorSearchOptions } from './database/types';
@@ -293,24 +294,27 @@ export class ContextDatabase {
     // === Private Methods ===
 
     private createDefaultConfig(): DatabaseConfig {
-        const dbPath = path.join(
-            this.extensionContext.globalStorageUri.fsPath,
-            'context.json'
-        );
-
+        // Use centralized global storage directory
+        const globalStoragePath = path.join(os.homedir(), '.context-manager-ai');
+        const dbPath = path.join(globalStoragePath, 'contexts.db'); // <--- Cambiar a .db
+        
+        Logger.info(`Using centralized SQLite database path: ${dbPath}`);
+        
         return {
-            type: 'json',
-            json: { path: dbPath, maxContexts: 1000 }
+            type: 'sqlite', // <--- Cambiar a 'sqlite'
+            sqlite: { path: dbPath }
         };
     }
 
     private async ensureStorageDir(): Promise<void> {
         const fs = await import('fs/promises');
         try {
-            await fs.mkdir(
-                this.extensionContext.globalStorageUri.fsPath,
-                { recursive: true }
-            );
+            // Get the directory from the current config
+            const storageDir = this.currentConfig.json?.path 
+                ? path.dirname(this.currentConfig.json.path)
+                : this.extensionContext.globalStorageUri.fsPath;
+                
+            await fs.mkdir(storageDir, { recursive: true });
         } catch (error) {
             Logger.error('Failed to create storage directory:', error as Error);
             throw error;

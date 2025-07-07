@@ -153,28 +153,11 @@ export class DatabaseMigration {
      * Insert migrated entry preserving original ID and timestamp
      */
     private async insertMigratedEntry(database: ContextDatabase, entry: ContextEntry): Promise<void> {
-        // We need to access the private db property, so we'll use a workaround
-        // by temporarily using the internal implementation
-        const db = (database as any).db;
-        
-        if (!db) {
-            throw new Error('Database connection not available');
+        const adapter = database.getAdapter();
+        if (!adapter.addMigratedContext) {
+            throw new Error('The current database adapter does not support migration.');
         }
-
-        const stmt = db.prepare(`
-            INSERT INTO contexts (id, projectPath, type, content, timestamp, importance, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-        
-        stmt.run(
-            entry.id,
-            entry.projectPath,
-            entry.type,
-            entry.content,
-            entry.timestamp.toISOString(),
-            entry.importance,
-            JSON.stringify(entry.tags)
-        );
+        await adapter.addMigratedContext(entry);
     }
 
     /**

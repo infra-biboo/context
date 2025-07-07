@@ -19,9 +19,10 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
         private readonly configStore: ConfigStore,
         private readonly autoCapture: AutoCapture,
         private readonly agentManager: AgentManager,
-        private readonly mcpServer: UnifiedMCPServer | undefined,
+        private mcpServer: UnifiedMCPServer | undefined,
         private readonly mcpConfigGenerator: MCPConfigGenerator,
-        private readonly tokenMonitor: SimpleTokenMonitor
+        private readonly tokenMonitor: SimpleTokenMonitor,
+        private readonly extensionContext: vscode.ExtensionContext
     ) {
         // Set up token monitor listeners
         this.setupTokenMonitorListeners();
@@ -123,7 +124,15 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 const contexts = await this.database.getContexts();
                 const agents = await this.agentManager.getAllAgents();
                 const databaseConfig = this.database.getDatabaseConfig();
-                const mcpStatus = this.mcpServer ? { connected: this.mcpServer.isServerRunning(), server: 'unified' } : { connected: false, server: 'none' };
+                const mcpStatus = this.mcpServer ? { 
+                    connected: this.mcpServer.isServerRunning(), 
+                    server: 'unified',
+                    status: this.mcpServer.isServerRunning() ? 'Server running' : 'Server stopped'
+                } : { 
+                    connected: false, 
+                    server: 'none',
+                    status: 'Server not started'
+                };
                 const onboardingCompleted = this.configStore.getOnboardingCompleted();
                 const tokenUsage = this.tokenMonitor.getCurrentUsage();
                 const config = this.configStore.getConfig();
@@ -206,27 +215,55 @@ export class ContextWebviewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showInformationMessage('Configuration reset. Please reload the webview.');
                 // The frontend will trigger a reload on its side.
                 return { status: 'reset' };
+            case 'generateClaudeDesktopConfig':
+                await this.mcpConfigGenerator.generateClaudeDesktopConfig();
+                return { status: 'config_generated' };
+            case 'generateClineConfig':
+                await this.mcpConfigGenerator.generateClineConfig();
+                return { status: 'config_generated' };
+            case 'generateGeminiConfig':
+                await this.mcpConfigGenerator.generateGeminiConfig();
+                return { status: 'config_generated' };
             default:
                 throw new Error(`Unknown config action: ${action}`);
         }
     }
 
     private async handleMcpActions(action: string, payload: any): Promise<any> {
-        if (!this.mcpServer) {
-            return { error: 'MCP Server not available' };
-        }
-        
         switch (action) {
             case 'start':
+                if (!this.mcpServer) {
+                    // Initialize MCP server if not already created
+                    const { UnifiedMCPServer } = await import('../mcp/unified-mcp-server');
+                    this.mcpServer = new UnifiedMCPServer(this.database, this.agentManager, this.extensionContext);
+                }
                 await this.mcpServer.start();
                 vscode.window.showInformationMessage('MCP Server started.');
-                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
+                return { 
+                    connected: this.mcpServer.isServerRunning(), 
+                    server: 'unified',
+                    status: 'Server running' 
+                };
             case 'stop':
+                if (!this.mcpServer) {
+                    return { connected: false, server: 'none', status: 'Server not started' };
+                }
                 await this.mcpServer.stop();
                 vscode.window.showInformationMessage('MCP Server stopped.');
-                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
+                return { 
+                    connected: this.mcpServer.isServerRunning(), 
+                    server: 'unified',
+                    status: 'Server stopped' 
+                };
             case 'getStatus':
-                return { connected: this.mcpServer.isServerRunning(), server: 'unified' };
+                if (!this.mcpServer) {
+                    return { connected: false, server: 'none', status: 'Server not started' };
+                }
+                return { 
+                    connected: this.mcpServer.isServerRunning(), 
+                    server: 'unified',
+                    status: this.mcpServer.isServerRunning() ? 'Server running' : 'Server stopped'
+                };
             default:
                 throw new Error(`Unknown MCP action: ${action}`);
         }

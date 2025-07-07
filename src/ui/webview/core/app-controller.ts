@@ -309,6 +309,45 @@ class AppController {
         }
     }
 
+    public async generateClaudeDesktopConfig() {
+        actions.setLoading(true);
+        try {
+            await bridge.sendRequest('config.generateClaudeDesktopConfig', {});
+            actions.setSuccess('Claude Desktop configuration generated successfully!');
+            setTimeout(() => actions.setSuccess(null), 3000);
+        } catch (error) {
+            actions.setError(error instanceof Error ? error.message : 'Failed to generate Claude Desktop config');
+        } finally {
+            actions.setLoading(false);
+        }
+    }
+
+    public async generateClineConfig() {
+        actions.setLoading(true);
+        try {
+            await bridge.sendRequest('config.generateClineConfig', {});
+            actions.setSuccess('Cline configuration generated successfully!');
+            setTimeout(() => actions.setSuccess(null), 3000);
+        } catch (error) {
+            actions.setError(error instanceof Error ? error.message : 'Failed to generate Cline config');
+        } finally {
+            actions.setLoading(false);
+        }
+    }
+
+    public async generateGeminiConfig() {
+        actions.setLoading(true);
+        try {
+            await bridge.sendRequest('config.generateGeminiConfig', {});
+            actions.setSuccess('Gemini configuration generated successfully!');
+            setTimeout(() => actions.setSuccess(null), 3000);
+        } catch (error) {
+            actions.setError(error instanceof Error ? error.message : 'Failed to generate Gemini config');
+        } finally {
+            actions.setLoading(false);
+        }
+    }
+
     // Alias for backward compatibility
     public loadContexts() {
         this.requestInitialData();

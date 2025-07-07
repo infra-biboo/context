@@ -1,8 +1,11 @@
 export interface DatabaseConfig {
-  type: 'json' | 'postgresql' | 'hybrid';
+  type: 'json' | 'postgresql' | 'hybrid' | 'sqlite';
   json?: {
     path: string;
     maxContexts?: number; // Default 1000
+  };
+  sqlite?: {
+    path: string;
   };
   postgresql?: {
     host: string;

@@ -89,7 +89,8 @@ export async function activate(context: vscode.ExtensionContext) {
         agentManager,
         mcpServer,
         mcpConfigGenerator,
-        tokenMonitor
+        tokenMonitor,
+        context
     );
     
     context.subscriptions.push(
@@ -106,6 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerMCPCommands(context);
     registerTokenCommands(context, tokenMonitor);
     registerMCPTestCommands(context);
+    
     
     // Add auto-capture, agent manager, database, token monitor, and MCP server to disposables
     context.subscriptions.push(autoCapture);

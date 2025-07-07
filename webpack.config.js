@@ -29,7 +29,8 @@ module.exports = [
       ]
     },
     externals: {
-      vscode: 'commonjs vscode'
+      vscode: 'commonjs vscode',
+      '@vscode/sqlite3': 'commonjs @vscode/sqlite3' // Mark as external
     },
     devtool: 'source-map',
   },
@@ -38,7 +39,7 @@ module.exports = [
     target: 'node',
     mode: 'none', // 'production' for release, 'none' for development
     entry: {
-      'mcp-server': './src/mcp/unified-mcp-server.ts'
+      'mcp-server': './src/mcp/standalone-server.ts'
     },
     output: {
       path: path.resolve(__dirname, 'dist'),
@@ -59,10 +60,10 @@ module.exports = [
       ]
     },
     externals: {
-      // Exclude VS Code from MCP server bundle
-      vscode: 'commonjs vscode',
+      // Exclude Node.js built-ins from MCP server bundle
       fs: 'commonjs fs',
       path: 'commonjs path',
+      os: 'commonjs os',
       'fs/promises': 'commonjs fs/promises'
     },
     devtool: 'source-map',
@@ -129,6 +130,7 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
+          { from: 'node_modules/@vscode/sqlite3', to: 'node_modules/@vscode/sqlite3', globOptions: { ignore: ['**/*.ts', '**/*.map'] } },
           // No need to copy index.html as it's generated in the provider
         ],
       }),

@@ -9,6 +9,7 @@ export interface DatabaseAdapter {
 
   // Context operations
   addContext(entry: Omit<ContextEntry, 'id' | 'timestamp'>): Promise<string>;
+  addMigratedContext?(entry: ContextEntry): Promise<void>; // For migration
   getContexts(options?: SearchOptions): Promise<ContextEntry[]>;
   getContextById(id: string): Promise<ContextEntry | undefined>;
   updateContext(id: string, updates: Partial<Omit<ContextEntry, 'id' | 'timestamp'>>): Promise<void>;

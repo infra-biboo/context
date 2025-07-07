@@ -26,12 +26,9 @@ const AppContent: Component = () => {
   ] as const;
 
   const visibleTabs = createMemo(() => {
-    // Verificación defensiva para evitar errores
-    if (store.session?.mcpStatus?.connected) {
-      return allTabs;
-    }
-    // Return a more restricted set of tabs when not connected
-    return allTabs.filter(tab => tab.id === 'general' || tab.id === 'settings');
+    // Always show all tabs - the extension should work fully even if MCP has connection issues
+    // Individual features will handle MCP connectivity gracefully
+    return allTabs;
   });
 
   // This effect ensures that if the active tab is no longer visible,

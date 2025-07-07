@@ -38,7 +38,19 @@
       },
       {
         "command": "claude-context.generateMCPConfig",
-        "title": "Claude Context: Generate MCP Config"
+        "title": "Claude Context: Generate Claude Code MCP Config"
+      },
+      {
+        "command": "claude-context.generateClaudeDesktopConfig",
+        "title": "Claude Context: Setup Claude Desktop Integration"
+      },
+      {
+        "command": "claude-context.generateClineConfig",
+        "title": "Claude Context: Setup Cline Integration"
+      },
+      {
+        "command": "claude-context.generateGeminiConfig",
+        "title": "Claude Context: Setup Gemini Integration"
       },
       {
         "command": "claude-context.setTokenUsage",
@@ -143,12 +155,16 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
+    "package-vsix": "vsce package",
+    "publish-vsix": "vsce publish",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "mcp-bridge": "node dist/mcp-bridge.js",
     "build:bridge": "tsc src/mcp/mcp-bridge.ts --outDir dist --target es2020 --module commonjs --esModuleInterop",
-    "dev:ui": "webpack serve --mode development --config webpack.config.js"
+    "dev:ui": "webpack serve --mode development --config webpack.config.js",
+    "build:prebuild": "prebuild --all --runtime electron --target 35.5.1 --arch x64 --arch arm64 --platform win32 --platform darwin --platform linux -o ./binaries",
+    "postinstall": "prebuild-install --fallback-to-build" 
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
@@ -167,15 +183,28 @@
     "typescript": "^4.9.4",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.1",
-    "webpack-dev-server": "^5.2.2"
+    "webpack-dev-server": "^5.2.2",
+    "prebuild": "^14.0.0",
+    "prebuild-install": "^7.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.0",
+    "@vscode/sqlite3": "^5.1.8-vscode",
     "express": "^4.18.2",
     "lucide": "^0.525.0",
     "lucide-solid": "^0.525.0",
     "openai": "^4.104.0",
     "solid-js": "^1.9.7",
     "zod": "^3.25.73"
-  }
+  },
+  "bundledDependencies": [
+    "@vscode/sqlite3"
+  ],
+
+  "files": [
+    "dist/",
+    "binaries/",
+    "package.json",
+    "README.md"
+  ]
 }

@@ -85,6 +85,42 @@ const MCPServerControl: Component = () => {
         </div>
       </div>
 
+      <div class="ai-integrations">
+        <h4>AI Assistant Integrations</h4>
+        <p class="section-description">
+          Connect this Context Manager with different AI assistants that support MCP protocol.
+        </p>
+        
+        <div class="integration-buttons">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              appController.generateClaudeDesktopConfig();
+            }}
+          >
+            Setup Claude Desktop
+          </Button>
+
+          <Button
+            variant="secondary"
+            onClick={() => {
+              appController.generateClineConfig();
+            }}
+          >
+            Setup Cline
+          </Button>
+
+          <Button
+            variant="secondary"
+            onClick={() => {
+              appController.generateGeminiConfig();
+            }}
+          >
+            Setup Gemini
+          </Button>
+        </div>
+      </div>
+
       {store.ui.errorMessage && (
         <div class="error-message">
           <AlertTriangle size={16} style={{'margin-right': '4px'}} /> {store.ui.errorMessage}

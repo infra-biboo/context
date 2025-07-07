@@ -308,6 +308,8 @@ export class JSONAdapter extends BaseDatabaseAdapter {
   }
 
   private async load(): Promise<void> {
+    Logger.info(`JSONAdapter attempting to load from: ${this.dataPath}`);
+    
     try {
       const content = await fs.readFile(this.dataPath, 'utf-8');
       const loaded = JSON.parse(content) as JSONDatabase;
@@ -322,10 +324,17 @@ export class JSONAdapter extends BaseDatabaseAdapter {
       Logger.info(`Loaded ${this.data.contexts.length} contexts and ${this.data.agents.length} agents`);
     } catch (error) {
       // File doesn't exist or is invalid, start with empty data
-      Logger.info('Starting with empty database');
+      Logger.info(`File not found or invalid - starting first time setup. Error: ${error}`);
+      Logger.info(`Will create new database at: ${this.dataPath}`);
       
-      // Initialize with standard agents
+      // Initialize with standard agents and welcome context
       await this.initializeStandardAgents();
+      await this.createWelcomeContext();
+      
+      // Save initial data
+      Logger.info('Saving initial database data...');
+      await this.save();
+      Logger.info('Initial database setup completed');
     }
   }
 
@@ -392,8 +401,66 @@ export class JSONAdapter extends BaseDatabaseAdapter {
       }
     ];
 
+    // Add agents directly to data without triggering save (will be saved by load method)
     for (const agentData of standardAgents) {
-      await this.addAgent(agentData);
+      const id = `agent_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      const newAgent: DatabaseAgent = { id, ...agentData };
+      this.data.agents.push(newAgent);
+      Logger.info(`Standard agent '${agentData.name}' initialized with ID: ${id}`);
     }
+  }
+
+  private async createWelcomeContext(): Promise<void> {
+    // dataPath is something like: /project/.context-manager/contexts.json
+    // workspaceFolder would be: /project/.context-manager
+    // projectPath would be: /project
+    const workspaceFolder = path.dirname(this.dataPath); // .context-manager folder
+    const projectPath = path.dirname(workspaceFolder);   // project root
+    
+    Logger.info(`Creating welcome context - dataPath: ${this.dataPath}, projectPath: ${projectPath}`);
+    
+    const welcomeContext: Omit<ContextEntry, 'id' | 'timestamp'> = {
+      projectPath,
+      type: 'decision',
+      content: `¡Bienvenido a Claude Context Manager! 🎉
+
+Esta extensión actúa como "memoria inteligente" para tu proyecto, capturando automáticamente:
+
+📝 **Contextos importantes**:
+- Decisiones de arquitectura
+- Cambios en el código
+- Conversaciones con IA
+- Issues y problemas
+
+🔌 **Integración MCP**:
+- Servidor MCP para Claude Desktop
+- Herramientas: get_context, add_context, search_contexts
+- Acceso directo desde Claude
+
+🤝 **Agentes especializados**:
+- Architect 🏗️ - Decisiones de arquitectura
+- Backend ⚙️ - Desarrollo del servidor
+- Frontend 🎨 - Interfaz de usuario
+
+💾 **Almacenamiento**:
+- Datos guardados en .context-manager/contexts.json
+- Formato unificado para extensión y MCP
+
+¡Comienza a capturar contexto y mejora tu flujo de trabajo con IA!`,
+      importance: 9,
+      tags: ['welcome', 'setup', 'first-time']
+    };
+
+    const id = `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const timestamp = new Date();
+    
+    // Add directly to data without triggering save (will be saved by load method)
+    this.data.contexts.push({
+      id,
+      timestamp,
+      ...welcomeContext
+    });
+    
+    Logger.info('Welcome context created for first-time setup');
   }
 }
