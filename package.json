@@ -163,7 +163,6 @@
     "mcp-bridge": "node dist/mcp-bridge.js",
     "build:bridge": "tsc src/mcp/mcp-bridge.ts --outDir dist --target es2020 --module commonjs --esModuleInterop",
     "dev:ui": "webpack serve --mode development --config webpack.config.js",
-    "build:prebuild": "prebuild --all --runtime electron --target 35.5.1 --arch x64 --arch arm64 --platform win32 --platform darwin --platform linux -o ./binaries",
     "postinstall": "prebuild-install --fallback-to-build" 
   },
   "devDependencies": {
@@ -184,7 +183,6 @@
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.1",
     "webpack-dev-server": "^5.2.2",
-    "prebuild": "^14.0.0",
     "prebuild-install": "^7.0.0"
   },
   "dependencies": {
@@ -203,7 +201,6 @@
 
   "files": [
     "dist/",
-    "binaries/",
     "package.json",
     "README.md"
   ]
