@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-13]
 
     steps:
       - name: Checkout code
@@ -25,22 +25,22 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Python (for node-gyp)
+      - name: Setup Python for node-gyp
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Install build tools on Linux
+      - name: Install build essentials on Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Confirm Xcode CLI on macOS Intel
+      - name: Confirm macOS CLI on Intel
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          echo "Using pre-installed Xcode CLI"
+          echo "macOS Intel runner"
 
       - name: Confirm Python on Windows
         if: runner.os == 'Windows'
@@ -50,15 +50,13 @@ jobs:
 
       - name: Install dependencies without scripts
         shell: bash
-        run: |
-          npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
 
-      - name: Build sqlite3 native binding (x64)
+      - name: Build sqlite3 binding (x64)
         shell: bash
-        run: |
-          npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
+        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
 
-      - name: Copy x64 .node to binaries/
+      - name: Copy x64 .node
         shell: bash
         run: |
           mkdir -p binaries
@@ -70,10 +68,10 @@ jobs:
           name: sqlite3-binaries-${{ matrix.os }}-x64
           path: binaries/
 
-  # 2) Build arm64 macOS binary on a self-hosted ARM Mac runner
+  # 2) Build arm64 macOS binary on GitHub-hosted ARM64 runner
   build-binaries-macos-arm64:
     name: Build sqlite3 on macOS-arm64
-    runs-on: [self-hosted, macos-14]
+    runs-on: macos-14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,27 +81,24 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Python (for node-gyp)
+      - name: Setup Python for node-gyp
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Confirm Xcode CLI on macOS ARM
+      - name: Confirm ARM64 runner
         shell: bash
-        run: |
-          xcode-select --install || true
+        run: echo "macOS ARM64 runner"
 
       - name: Install dependencies without scripts
         shell: bash
-        run: |
-          npm ci --ignore-scripts
+        run: npm ci --ignore-scripts
 
-      - name: Build sqlite3 native binding (arm64)
+      - name: Build sqlite3 binding (arm64)
         shell: bash
-        run: |
-          npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
+        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
 
-      - name: Copy arm64 .node to binaries/
+      - name: Copy arm64 .node
         shell: bash
         run: |
           mkdir -p binaries
@@ -115,9 +110,9 @@ jobs:
           name: sqlite3-binaries-macos-arm64
           path: binaries/
 
-  # 3) Collect all binaries, create Universal2 and produce the VSIX
+  # 3) Create macOS Universal2 & package VSIX
   package-vsix:
-    name: Download binaries & create VSIX
+    name: Download binaries & package VSIX
     runs-on: ubuntu-latest
     needs: [build-binaries-x64, build-binaries-macos-arm64]
     steps:
@@ -129,18 +124,15 @@ jobs:
         with:
           path: binaries/
 
-      - name: Create macOS Universal2 binary
+      - name: Create macOS Universal2
         shell: bash
         run: |
-          # Only if both archs exist
-          if [ -f binaries/vscode-sqlite3-darwin-x64.node ] && [ -f binaries/vscode-sqlite3-darwin-arm64.node ]; then
-            lipo -create \
-              binaries/vscode-sqlite3-darwin-x64.node \
-              binaries/vscode-sqlite3-darwin-arm64.node \
-              -output binaries/vscode-sqlite3-darwin-universal2.node
-          fi
+          lipo -create \
+            binaries/vscode-sqlite3-darwin-x64.node \
+            binaries/vscode-sqlite3-darwin-arm64.node \
+            -output binaries/vscode-sqlite3-darwin-universal2.node
 
-      - name: Install production dependencies
+      - name: Install production deps
         shell: bash
         run: npm ci --omit=dev
 
