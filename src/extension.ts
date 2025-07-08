@@ -49,10 +49,10 @@ export async function activate(context: vscode.ExtensionContext) {
     } catch (error) {
         console.error('❌ Database initialization failed:', error);
         Logger.error('Database initialization failed:', error as Error);
-        vscode.window.showErrorMessage(
-            'Failed to initialize database. Some features may be unavailable.'
+        vscode.window.showWarningMessage(
+            'Database initialization failed. Extension will continue with limited functionality.'
         );
-        return;
+        // Continue with extension activation - don't return
     }
     
     // Initialize core components with new database

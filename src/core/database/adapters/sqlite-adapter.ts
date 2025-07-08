@@ -51,12 +51,21 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         
         // Determine binary name based on platform
         let binaryName;
+        let fallbackBinaryNames: string[] = [];
+        
         if (platform === 'win32') {
             binaryName = 'vscode-sqlite3-win32-x64.node';
+            fallbackBinaryNames = ['vscode-sqlite3.node'];
         } else if (platform === 'darwin') {
-            binaryName = arch === 'arm64' ? 'vscode-sqlite3-darwin-arm64.node' : 'vscode-sqlite3-darwin-x64.node';
+            // For macOS, prioritize universal2, then specific arch
+            binaryName = 'vscode-sqlite3-darwin-universal2.node';
+            fallbackBinaryNames = [
+                arch === 'arm64' ? 'vscode-sqlite3-darwin-arm64.node' : 'vscode-sqlite3-darwin-x64.node',
+                'vscode-sqlite3.node'
+            ];
         } else {
             binaryName = 'vscode-sqlite3-linux-x64.node';
+            fallbackBinaryNames = ['vscode-sqlite3.node'];
         }
         
         Logger.info(`Platform: ${platform}, Architecture: ${arch}, Binary: ${binaryName}`);
@@ -77,6 +86,18 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                     return sqlite3Module;
                 }
                 
+                // Try fallback binaries in CI binaries directory
+                for (const fallbackName of fallbackBinaryNames) {
+                    const fallbackBinariesPath = path.join(extensionPath, 'dist', 'binaries', fallbackName);
+                    Logger.info(`Trying fallback binary in CI binaries: ${fallbackBinariesPath}`);
+                    
+                    if (await fs.access(fallbackBinariesPath).then(() => true).catch(() => false)) {
+                        const sqlite3Module = eval('require')(fallbackBinariesPath);
+                        Logger.info(`✅ Successfully loaded fallback SQLite3 binary: ${fallbackName}`);
+                        return sqlite3Module;
+                    }
+                }
+                
                 // Try platform-specific binary in dist root (development fallback)
                 const binaryPath = path.join(extensionPath, 'dist', binaryName);
                 Logger.info(`Trying to load SQLite3 binary from: ${binaryPath}`);
@@ -87,14 +108,16 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                     return sqlite3Module;
                 }
                 
-                // Try fallback universal binary
-                const fallbackPath = path.join(extensionPath, 'dist', 'binaries', 'vscode-sqlite3.node');
-                Logger.info(`Trying fallback SQLite3 binary from: ${fallbackPath}`);
-                
-                if (await fs.access(fallbackPath).then(() => true).catch(() => false)) {
-                    const sqlite3Module = eval('require')(fallbackPath);
-                    Logger.info('✅ Successfully loaded fallback SQLite3 binary');
-                    return sqlite3Module;
+                // Try fallback binaries in dist root
+                for (const fallbackName of fallbackBinaryNames) {
+                    const fallbackPath = path.join(extensionPath, 'dist', fallbackName);
+                    Logger.info(`Trying fallback binary in dist root: ${fallbackPath}`);
+                    
+                    if (await fs.access(fallbackPath).then(() => true).catch(() => false)) {
+                        const sqlite3Module = eval('require')(fallbackPath);
+                        Logger.info(`✅ Successfully loaded fallback SQLite3 binary: ${fallbackName}`);
+                        return sqlite3Module;
+                    }
                 }
             } else {
                 Logger.warn('Extension path not found from vscode.extensions.getExtension');
@@ -103,17 +126,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
             Logger.error('Strategy 1 failed:', error as Error);
         }
         
-        // Strategy 2: Try to load from bundled node_modules (eval to avoid webpack bundling)
-        try {
-            Logger.info('Trying to load SQLite3 from bundled node_modules');
-            const sqlite3Module = eval('require')('@vscode/sqlite3');
-            Logger.info('✅ Successfully loaded SQLite3 from bundled module');
-            return sqlite3Module;
-        } catch (error) {
-            Logger.error('Strategy 2 failed:', error as Error);
-        }
-        
-        // Strategy 3: Try relative paths from current working directory
+        // Strategy 2: Try relative paths from current working directory
         try {
             const cwd = process.cwd();
             Logger.info(`Current working directory: ${cwd}`);
@@ -127,7 +140,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 return sqlite3Module;
             }
         } catch (error) {
-            Logger.error('Strategy 3 failed:', error as Error);
+            Logger.error('Strategy 2 failed:', error as Error);
         }
         
         // Final failure

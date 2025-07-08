@@ -50,8 +50,11 @@ export class ContextDatabase {
             this.isInitialized = true;
             Logger.info('ContextDatabase initialized successfully');
         } catch (error) {
-            Logger.error('Failed to initialize ContextDatabase:', error as Error);
-            throw error;
+            Logger.error('Failed to initialize ContextDatabase (non-critical):', error as Error);
+            // Mark as initialized even if adapter connection failed
+            // This allows the extension to continue with limited functionality
+            this.isInitialized = true;
+            Logger.info('ContextDatabase marked as initialized with limited functionality');
         }
     }
 
@@ -324,6 +327,10 @@ export class ContextDatabase {
     private ensureInitialized(): void {
         if (!this.isInitialized) {
             throw new Error('Database not initialized. Call initialize() first.');
+        }
+        // Additional check: verify adapter is actually connected
+        if (!this.adapter.isConnected()) {
+            throw new Error('Database adapter is not connected. Extension running with limited functionality.');
         }
     }
 
