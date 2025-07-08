@@ -214,31 +214,7 @@ jobs:
           # Install vsce globally
           npm install -g @vscode/vsce
 
-      - name: Install build dependencies avoiding native modules
-        shell: bash
-        run: |
-          # First, backup the original package.json
-          cp package.json package.json.backup
-          
-          # Create a modified package.json that excludes problematic native dependencies
-          node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          
-          // Remove @vscode/sqlite3 from dependencies to avoid prebuild-install issues
-          if (pkg.dependencies && pkg.dependencies['@vscode/sqlite3']) {
-            console.log('Removing @vscode/sqlite3 from dependencies for build');
-            delete pkg.dependencies['@vscode/sqlite3'];
-          }
-          
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          "
-          
-          # Now install all dependencies (dev + prod) without the problematic native ones
-          npm ci --ignore-scripts
-          
-          # Restore original package.json for packaging metadata
-          cp package.json.backup package.json
+      
 
       - name: Setup SQLite3 binaries for dynamic loading
         shell: bash
@@ -285,31 +261,6 @@ jobs:
           ls -la dist/ || echo "No dist directory found"
           ls -la node_modules/@vscode/sqlite3/ || echo "No SQLite3 module found"
           
-          # Backup original package.json
-          cp package.json package.json.original
-          
-          # Temporarily switch to CI prepublish script and clean dependencies
-          node -e "
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          
-          // Switch to CI prepublish version
-          pkg.scripts['vscode:prepublish'] = pkg.scripts['vscode:prepublish-ci'] || 'echo Building for CI';
-          console.log('✓ Switched to CI prepublish script');
-          
-          // Keep @vscode/sqlite3 in dependencies - needed for bundledDependencies
-          console.log('✓ Keeping @vscode/sqlite3 in dependencies for dynamic loading');
-          
-          // Remove postinstall script that causes issues in CI
-          if (pkg.scripts && pkg.scripts.postinstall) {
-            console.log('✓ Temporarily removing postinstall script');
-            delete pkg.scripts.postinstall;
-          }
-          
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('✓ Package.json prepared for CI packaging');
-          "
-          
           # Package VSIX with proper options
           echo "Creating VSIX package..."
           if vsce package --no-yarn --no-dependencies --out claude-context-manager.vsix; then
@@ -328,15 +279,10 @@ jobs:
                 cat package.json
                 echo "Extension structure:"
                 find . -name "*.js" -path "./dist/*" | head -10
-                cp package.json.original package.json
                 exit 1
               fi
             fi
           fi
-          
-          # Restore original package.json
-          cp package.json.original package.json
-          echo "✓ Restored original package.json"
           
           # Verify the package was created and show its contents
           if [ -f "claude-context-manager.vsix" ]; then
