@@ -290,11 +290,24 @@ jobs:
           echo "Preparing SQLite3 module for packaging..."
           if [ -f "node_modules/@vscode/sqlite3/package.json" ]; then
             echo "✓ SQLite3 module found"
-            # Ensure the binary is in the right place
+            
+            # Create necessary directories
+            mkdir -p node_modules/@vscode/sqlite3/lib
+            mkdir -p node_modules/@vscode/sqlite3/build/Release
+            
+            # Copy all platform binaries to the lib directory
+            echo "Copying all platform binaries to SQLite3 lib directory..."
+            for binary in binaries/vscode-sqlite3-*.node; do
+              if [ -f "$binary" ]; then
+                cp "$binary" node_modules/@vscode/sqlite3/lib/
+                echo "✓ Copied $(basename $binary)"
+              fi
+            done
+            
+            # Also copy the macOS universal binary to build/Release for the packaging machine
             if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
-              mkdir -p node_modules/@vscode/sqlite3/lib
-              cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/lib/
-              echo "✓ Copied macOS binary to SQLite3 lib directory"
+              cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
+              echo "✓ Copied macOS universal binary to build/Release for packaging"
             fi
           fi
           

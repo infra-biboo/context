@@ -90,6 +90,30 @@ try {
     if (!foundBinary) {
         throw new Error(`Platform-specific binary not found in any expected location for: ${expectedBinaryName}`);
     }
+    
+    // 3.5. Prepare SQLite3 module for testing - copy platform binary to build/Release
+    const buildReleasePath = path.join(extensionPath, 'node_modules', '@vscode', 'sqlite3', 'build', 'Release');
+    if (!fs.existsSync(buildReleasePath)) {
+        fs.mkdirSync(buildReleasePath, { recursive: true });
+    }
+    
+    const targetBinaryPath = path.join(buildReleasePath, 'vscode-sqlite3.node');
+    let sourceBinaryPath;
+    
+    // Find the source binary in order of preference
+    if (fs.existsSync(distBinaryPath)) {
+        sourceBinaryPath = distBinaryPath;
+    } else if (fs.existsSync(moduleBinaryPath)) {
+        sourceBinaryPath = moduleBinaryPath;
+    } else if (fs.existsSync(rootBinaryPath)) {
+        sourceBinaryPath = rootBinaryPath;
+    }
+    
+    if (sourceBinaryPath) {
+        console.log(`Copying platform binary to build/Release for testing...`);
+        fs.copyFileSync(sourceBinaryPath, targetBinaryPath);
+        console.log(`✓ Copied ${expectedBinaryName} to build/Release/vscode-sqlite3.node`);
+    }
 
     // 4. Execute a smoke test: try to require the module
     console.log('Running smoke test: attempting to require the sqlite3 module...');
