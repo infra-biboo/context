@@ -1,5 +1,7 @@
 
-import * as sqlite3 from '@vscode/sqlite3';
+// import * as sqlite3 from '@vscode/sqlite3';
+// Dynamic import to handle different platforms and paths
+let sqlite3: any;
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { BaseDatabaseAdapter } from '../database-adapter';
@@ -29,7 +31,7 @@ interface AgentRow {
 }
 
 export class SQLiteAdapter extends BaseDatabaseAdapter {
-    private db: sqlite3.Database | null = null;
+    private db: any | null = null;
     private config: DatabaseConfig['sqlite'];
 
     constructor(config: DatabaseConfig['sqlite']) {
@@ -40,11 +42,64 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         this.config = config;
     }
 
+    private async loadSQLite3(): Promise<any> {
+        const os = require('os');
+        const vscode = require('vscode');
+        
+        try {
+            // Try to load from extension's dist directory
+            const extensionPath = vscode.extensions.getExtension('claude-dev.claude-context-manager')?.extensionPath;
+            if (extensionPath) {
+                const platform = os.platform();
+                const arch = os.arch();
+                
+                let binaryName;
+                if (platform === 'win32') {
+                    binaryName = 'vscode-sqlite3-win32-x64.node';
+                } else if (platform === 'darwin') {
+                    binaryName = arch === 'arm64' ? 'vscode-sqlite3-darwin-arm64.node' : 'vscode-sqlite3-darwin-x64.node';
+                } else {
+                    binaryName = 'vscode-sqlite3-linux-x64.node';
+                }
+                
+                const binaryPath = path.join(extensionPath, 'dist', binaryName);
+                Logger.info(`Trying to load SQLite3 binary from: ${binaryPath}`);
+                
+                if (await fs.access(binaryPath).then(() => true).catch(() => false)) {
+                    const Database = require(binaryPath);
+                    return { Database };
+                }
+                
+                // Fallback to universal binary
+                const fallbackPath = path.join(extensionPath, 'dist', 'vscode-sqlite3.node');
+                Logger.info(`Trying fallback SQLite3 binary from: ${fallbackPath}`);
+                
+                if (await fs.access(fallbackPath).then(() => true).catch(() => false)) {
+                    const Database = require(fallbackPath);
+                    return { Database };
+                }
+            }
+            
+            // Last resort: try the bundled module (this might fail)
+            Logger.info('Trying to load SQLite3 from bundled module');
+            throw new Error('No SQLite3 binary found in expected locations');
+            
+        } catch (error) {
+            Logger.error('Failed to load SQLite3:', error as Error);
+            throw new Error(`Failed to load SQLite3 module: ${error}`);
+        }
+    }
+
     async connect(): Promise<void> {
         if (this.isConnectedFlag) {
             return;
         }
         try {
+            // Load SQLite3 dynamically
+            if (!sqlite3) {
+                sqlite3 = await this.loadSQLite3();
+            }
+            
             const dbPath = this.config!.path;
             await fs.mkdir(path.dirname(dbPath), { recursive: true });
             

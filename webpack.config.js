@@ -29,8 +29,8 @@ module.exports = [
       ]
     },
     externals: {
-      vscode: 'commonjs vscode',
-      '@vscode/sqlite3': 'commonjs @vscode/sqlite3' // Mark as external
+      vscode: 'commonjs vscode'
+      // Note: @vscode/sqlite3 removed from externals - will be loaded dynamically
     },
     devtool: 'source-map',
   },
@@ -130,6 +130,8 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
+          // Copy SQLite3 binaries to dist for direct loading
+          { from: 'node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node', to: 'vscode-sqlite3.node', noErrorOnMissing: true },
           // No need to copy index.html as it's generated in the provider
         ],
       }),
