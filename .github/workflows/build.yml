@@ -113,7 +113,7 @@ jobs:
   # 3) Create macOS Universal2 & package VSIX
   package-vsix:
     name: Download binaries & package VSIX
-    runs-on: macos-latest  # needs lipo available
+    runs-on: macos-13  # use Intel runner with lipo available
     needs: [build-binaries-x64, build-binaries-macos-arm64]
     steps:
       - name: Checkout code
@@ -123,6 +123,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: binaries/
+
+      - name: Install Xcode CLI Tools
+        shell: bash
+        run: |
+          xcode-select --install || true
 
       - name: Create macOS Universal2
         shell: bash
