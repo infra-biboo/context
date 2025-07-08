@@ -1,4 +1,3 @@
-# .github/workflows/build-and-package.yml
 name: Build & Package Multi-Platform VSIX
 
 on:
@@ -8,20 +7,13 @@ on:
     branches: [ main ]
 
 jobs:
-  build-binaries:
-    name: Build sqlite3 (${{ matrix.os }}/${{ matrix.arch }})
+  # 1) Build x64 binaries on GitHub-hosted runners (Linux, Windows, macOS Intel)
+  build-binaries-x64:
+    name: Build sqlite3 on ${{ matrix.os }}-x64
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            arch: x64
-          - os: windows-latest
-            arch: x64
-          - os: macos-latest
-            arch: x64
-          - os: macos-latest
-            arch: arm64
+        os: [ubuntu-latest, windows-latest, macos-13]
 
     steps:
       - name: Checkout code
@@ -30,85 +22,147 @@ jobs:
       - name: Setup Node.js v20
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
       - name: Setup Python for node-gyp
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Install build tools on Linux
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install build essentials on Linux
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-        shell: bash
+          sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Install Xcode CLI on macOS
-        if: matrix.os == 'macos-latest'
-        run: xcode-select --install || true
+      - name: Confirm macOS CLI on Intel
+        if: runner.os == 'macOS'
         shell: bash
+        run: |
+          echo "macOS Intel runner"
 
-      # Windows already incluye Build Tools y Python preinstalados
-      - name: Verify Windows Build Tools
-        if: matrix.os == 'windows-latest'
+      - name: Confirm Python on Windows
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Confirma que `msbuild` y `python` existen
-          Get-Command msbuild
           python --version
 
       - name: Install dependencies without scripts
+        shell: bash
         run: npm ci --ignore-scripts
-        shell: bash
 
-      - name: Rebuild sqlite3 for ${{ matrix.arch }}
-        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=${{ matrix.arch }}
+      - name: Build sqlite3 binding (x64)
         shell: bash
+        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
 
-      - name: Copy native module to artifacts
+      - name: Copy x64 .node
+        shell: bash
         run: |
           mkdir -p binaries
-          cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node \
-             binaries/vscode-sqlite3-${{ matrix.os }}-${{ matrix.arch }}.node
-        shell: bash
+          cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-x64.node
 
-      - name: Upload sqlite3 binary
+      - name: Upload x64 binaries
         uses: actions/upload-artifact@v4
         with:
-          name: sqlite3-binaries-${{ matrix.os }}-${{ matrix.arch }}
-          path: binaries/vscode-sqlite3-${{ matrix.os }}-${{ matrix.arch }}.node
+          name: sqlite3-binaries-${{ matrix.os }}-x64
+          path: binaries/
 
-  package-vsix:
-    name: Create macOS universal2 & package VSIX
-    runs-on: macos-latest
-    needs: build-binaries
-
+  # 2) Build arm64 macOS binary on GitHub-hosted ARM64 runner
+  build-binaries-macos-arm64:
+    name: Build sqlite3 on macOS-arm64
+    runs-on: macos-14
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all sqlite3 binaries
-        uses: actions/download-artifact@v4
+      - name: Setup Node.js v20
+        uses: actions/setup-node@v4
         with:
+          node-version: '20'
+
+      - name: Setup Python for node-gyp
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Confirm ARM64 runner
+        shell: bash
+        run: |
+          echo "macOS ARM64 runner"
+
+      - name: Install dependencies without scripts
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Build sqlite3 binding (arm64)
+        shell: bash
+        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
+
+      - name: Copy arm64 .node
+        shell: bash
+        run: |
+          mkdir -p binaries
+          cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-arm64.node
+
+      - name: Upload arm64 macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-arm64
           path: binaries/
 
-      - name: Build macOS universal2
-        run: |
-          # Combina el slice Intel + ARM en un único .node universal2
-          lipo -create \
-            binaries/vscode-sqlite3-macos-latest-x64.node \
-            binaries/vscode-sqlite3-macos-latest-arm64.node \
-            -output binaries/vscode-sqlite3-darwin-universal2.node
-        shell: bash
+  # 3) Create macOS Universal2 & package VSIX
+  package-vsix:
+    name: Download binaries & package VSIX
+    runs-on: macos-13  # Intel runner with lipo
+    needs: [build-binaries-x64, build-binaries-macos-arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install production deps (sin postinstall)
-        run: npm ci --omit=dev --ignore-scripts
+      # Download each artifact flattening into binaries/
+      - name: Download Linux x64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-ubuntu-latest-x64
+          path: binaries
+
+      - name: Download Windows x64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-windows-latest-x64
+          path: binaries
+
+      - name: Download macOS Intel x64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-13-x64
+          path: binaries
+
+      - name: Download macOS ARM64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-arm64
+          path: binaries
+
+      - name: Install Xcode CLI Tools
         shell: bash
+        run: xcode-select --install || true
+
+      - name: Create macOS Universal2
+        shell: bash
+        run: |
+          lipo -create \
+            binaries/vscode-sqlite3-darwin-x64.node \
+            binaries/vscode-sqlite3-darwin-arm64.node \
+            -output binaries/vscode-sqlite3-darwin-universal2.node
+
+      - name: Install production deps
+        shell: bash
+        run: npm ci --omit=dev
 
       - name: Package VSIX
-        run: npx vsce package --out claude-context-manager.vsix
         shell: bash
+        run: npx vsce package --out claude-context-manager.vsix
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
