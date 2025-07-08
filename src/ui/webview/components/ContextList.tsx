@@ -118,7 +118,10 @@ const ContextList: Component<ContextListProps> = (props) => {
 
   onMount(() => {
     if (props.autoRefresh) {
-      loadInitialData();
+      // Delay de 400ms para evitar congelamiento al cambiar de tab
+      setTimeout(() => {
+        loadInitialData();
+      }, 400);
     }
 
     if (scrollContainer && props.mode === 'search') {

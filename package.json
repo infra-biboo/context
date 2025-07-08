@@ -195,5 +195,8 @@
     "openai": "^4.104.0",
     "solid-js": "^1.9.7",
     "zod": "^3.25.73"
-  }
+  },
+  "bundledDependencies": [
+    "@vscode/sqlite3"
+  ]
 }

@@ -408,11 +408,8 @@ EOF
           pkg.scripts['vscode:prepublish'] = pkg.scripts['vscode:prepublish-ci'] || 'echo Building for CI';
           console.log('✓ Switched to CI prepublish script');
           
-          // Clean problematic dependencies for packaging
-          if (pkg.dependencies && pkg.dependencies['@vscode/sqlite3']) {
-            console.log('✓ Temporarily removing @vscode/sqlite3 from dependencies');
-            delete pkg.dependencies['@vscode/sqlite3'];
-          }
+          // Keep @vscode/sqlite3 in dependencies - it's external but needed at runtime
+          console.log('✓ Keeping @vscode/sqlite3 in dependencies for runtime loading');
           
           // Remove postinstall script that causes issues in CI
           if (pkg.scripts && pkg.scripts.postinstall) {
