@@ -208,6 +208,10 @@ jobs:
           echo "Binaries prepared for packaging:"
           ls -la dist/binaries/
 
+      - name: Install project dependencies
+        shell: bash
+        run: npm ci
+
       - name: Install vsce only
         shell: bash
         run: |
