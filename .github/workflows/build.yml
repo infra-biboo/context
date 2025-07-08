@@ -265,17 +265,15 @@ jobs:
           echo "export = {};" > node_modules/@vscode/sqlite3/lib/sqlite3.d.ts
           
           # Create minimal package.json for @vscode/sqlite3 to avoid validation issues
-          cat > node_modules/@vscode/sqlite3/package.json << 'EOF'
-{
-  "name": "@vscode/sqlite3",
-  "version": "5.1.8-vscode",
-  "description": "SQLite3 bindings for Node.js",
-  "main": "lib/sqlite3.js",
-  "types": "lib/sqlite3.d.ts",
-  "gypfile": true,
-  "license": "BSD-3-Clause"
-}
-EOF
+          echo '{
+            "name": "@vscode/sqlite3",
+            "version": "5.1.8-vscode",
+            "description": "SQLite3 bindings for Node.js",
+            "main": "lib/sqlite3.js",
+            "types": "lib/sqlite3.d.ts",
+            "gypfile": true,
+            "license": "BSD-3-Clause"
+          }' > node_modules/@vscode/sqlite3/package.json
           
           echo "Created minimal @vscode/sqlite3 structure for TypeScript"
 
