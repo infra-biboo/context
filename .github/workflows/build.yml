@@ -214,7 +214,33 @@ jobs:
           # Install vsce globally
           npm install -g @vscode/vsce
 
-      - name: Setup extension structure without native deps
+      - name: Install build dependencies avoiding native modules
+        shell: bash
+        run: |
+          # First, backup the original package.json
+          cp package.json package.json.backup
+          
+          # Create a modified package.json that excludes problematic native dependencies
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          
+          // Remove @vscode/sqlite3 from dependencies to avoid prebuild-install issues
+          if (pkg.dependencies && pkg.dependencies['@vscode/sqlite3']) {
+            console.log('Removing @vscode/sqlite3 from dependencies for build');
+            delete pkg.dependencies['@vscode/sqlite3'];
+          }
+          
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          
+          # Now install all dependencies (dev + prod) without the problematic native ones
+          npm ci --ignore-scripts
+          
+          # Restore original package.json for packaging metadata
+          cp package.json.backup package.json
+
+      - name: Setup extension structure with pre-built binaries
         shell: bash
         run: |
           # Create minimal node_modules structure for packaging
@@ -241,9 +267,24 @@ jobs:
         shell: bash
         run: |
           echo "Packaging VSIX..."
-          vsce package --out claude-context-manager.vsix
-          echo "VSIX package created successfully"
-          ls -la claude-context-manager.vsix
+          
+          # Option 1: Try normal packaging first
+          if vsce package --out claude-context-manager.vsix; then
+            echo "✓ VSIX package created successfully"
+          else
+            echo "❌ Normal packaging failed, trying without prepublish script..."
+            # Option 2: Skip prepublish script if it fails
+            vsce package --no-yarn --skip-duplicate --out claude-context-manager.vsix
+          fi
+          
+          # Verify the package was created
+          if [ -f "claude-context-manager.vsix" ]; then
+            echo "✓ VSIX package created successfully"
+            ls -la claude-context-manager.vsix
+          else
+            echo "❌ VSIX package creation failed"
+            exit 1
+          fi
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
