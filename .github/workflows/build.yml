@@ -246,20 +246,84 @@ jobs:
           # Create minimal node_modules structure for packaging
           mkdir -p node_modules/@vscode/sqlite3/build/Release/
           
-          # Copy our pre-built universal binary
+          # Copy all available binaries to the expected locations
+          echo "Setting up multi-platform SQLite3 binaries..."
+          
+          # Create platform-specific directories
+          mkdir -p node_modules/@vscode/sqlite3/lib/binding/napi-v6-{linux-x64,win32-x64,darwin-x64,darwin-arm64}
+          
+          # Copy platform-specific binaries
+          if [ -f "binaries/vscode-sqlite3-linux-x64.node" ]; then
+            cp binaries/vscode-sqlite3-linux-x64.node node_modules/@vscode/sqlite3/lib/binding/napi-v6-linux-x64/vscode-sqlite3.node
+            echo "✓ Copied Linux x64 binary"
+          fi
+          
+          if [ -f "binaries/vscode-sqlite3-win32-x64.node" ]; then
+            cp binaries/vscode-sqlite3-win32-x64.node node_modules/@vscode/sqlite3/lib/binding/napi-v6-win32-x64/vscode-sqlite3.node
+            echo "✓ Copied Windows x64 binary"
+          fi
+          
+          if [ -f "binaries/vscode-sqlite3-darwin-x64.node" ]; then
+            cp binaries/vscode-sqlite3-darwin-x64.node node_modules/@vscode/sqlite3/lib/binding/napi-v6-darwin-x64/vscode-sqlite3.node
+            echo "✓ Copied macOS Intel binary"
+          fi
+          
+          if [ -f "binaries/vscode-sqlite3-darwin-arm64.node" ]; then
+            cp binaries/vscode-sqlite3-darwin-arm64.node node_modules/@vscode/sqlite3/lib/binding/napi-v6-darwin-arm64/vscode-sqlite3.node
+            echo "✓ Copied macOS ARM64 binary"
+          fi
+          
+          # Also copy the primary binary (for fallback)
           if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
             cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-            echo "Copied universal2 binary for packaging"
-          else
-            echo "Warning: Universal2 binary not found"
-            exit 1
+            echo "✓ Copied universal binary as fallback"
+          elif [ -f "binaries/vscode-sqlite3-win32-x64.node" ]; then
+            cp binaries/vscode-sqlite3-win32-x64.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
+            echo "✓ Copied Windows binary as fallback"
+          elif [ -f "binaries/vscode-sqlite3-linux-x64.node" ]; then
+            cp binaries/vscode-sqlite3-linux-x64.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
+            echo "✓ Copied Linux binary as fallback"
           fi
           
           # Create minimal module structure for TypeScript compilation in CI
           mkdir -p node_modules/@vscode/sqlite3/lib
           
-          # Create basic JavaScript module placeholder
-          echo 'const Database = require("../build/Release/vscode-sqlite3.node"); module.exports = Database;' > node_modules/@vscode/sqlite3/lib/sqlite3.js
+          # Create smart JavaScript module that can find the right binary
+          cat > node_modules/@vscode/sqlite3/lib/sqlite3.js << 'EOF'
+const path = require('path');
+const os = require('os');
+
+function getPlatformPath() {
+  const platform = os.platform();
+  const arch = os.arch();
+  
+  let platformName;
+  if (platform === 'win32') {
+    platformName = 'win32-x64';
+  } else if (platform === 'darwin') {
+    platformName = arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+  } else if (platform === 'linux') {
+    platformName = 'linux-x64';
+  } else {
+    platformName = 'darwin-x64'; // fallback
+  }
+  
+  const platformSpecificPath = path.join(__dirname, 'binding', `napi-v6-${platformName}`, 'vscode-sqlite3.node');
+  const fallbackPath = path.join(__dirname, '..', 'build', 'Release', 'vscode-sqlite3.node');
+  
+  try {
+    return require(platformSpecificPath);
+  } catch (e) {
+    try {
+      return require(fallbackPath);
+    } catch (e2) {
+      throw new Error(`SQLite3 binary not found for platform ${platform}-${arch}. Tried: ${platformSpecificPath}, ${fallbackPath}`);
+    }
+  }
+}
+
+module.exports = getPlatformPath();
+EOF
           
           # Create TypeScript definitions using Node.js to avoid YAML issues
           node -e '
