@@ -288,42 +288,8 @@ jobs:
           # Create minimal module structure for TypeScript compilation in CI
           mkdir -p node_modules/@vscode/sqlite3/lib
           
-          # Create smart JavaScript module that can find the right binary
-          cat > node_modules/@vscode/sqlite3/lib/sqlite3.js << 'EOF'
-const path = require('path');
-const os = require('os');
-
-function getPlatformPath() {
-  const platform = os.platform();
-  const arch = os.arch();
-  
-  let platformName;
-  if (platform === 'win32') {
-    platformName = 'win32-x64';
-  } else if (platform === 'darwin') {
-    platformName = arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
-  } else if (platform === 'linux') {
-    platformName = 'linux-x64';
-  } else {
-    platformName = 'darwin-x64'; // fallback
-  }
-  
-  const platformSpecificPath = path.join(__dirname, 'binding', `napi-v6-${platformName}`, 'vscode-sqlite3.node');
-  const fallbackPath = path.join(__dirname, '..', 'build', 'Release', 'vscode-sqlite3.node');
-  
-  try {
-    return require(platformSpecificPath);
-  } catch (e) {
-    try {
-      return require(fallbackPath);
-    } catch (e2) {
-      throw new Error(`SQLite3 binary not found for platform ${platform}-${arch}. Tried: ${platformSpecificPath}, ${fallbackPath}`);
-    }
-  }
-}
-
-module.exports = getPlatformPath();
-EOF
+          # Create simple JavaScript module that loads the default binary
+          echo 'const Database = require("../build/Release/vscode-sqlite3.node"); module.exports = Database;' > node_modules/@vscode/sqlite3/lib/sqlite3.js
           
           # Create TypeScript definitions using Node.js to avoid YAML issues
           node -e '
