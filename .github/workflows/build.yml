@@ -210,7 +210,25 @@ jobs:
 
       - name: Install project dependencies
         shell: bash
-        run: npm ci
+        run: |
+          echo "Installing dependencies without running postinstall scripts..."
+          npm ci --ignore-scripts
+          
+          echo "Setting up SQLite3 module structure..."
+          # Create the necessary structure for SQLite3
+          mkdir -p node_modules/@vscode/sqlite3/lib
+          mkdir -p node_modules/@vscode/sqlite3/build/Release
+          
+          # Copy the appropriate binary for the current platform
+          if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
+            echo "Copying macOS universal binary to SQLite3 module..."
+            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
+            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/lib/vscode-sqlite3-darwin-universal2.node
+          fi
+          
+          echo "SQLite3 module structure:"
+          ls -la node_modules/@vscode/sqlite3/build/Release/ || echo "No Release directory"
+          ls -la node_modules/@vscode/sqlite3/lib/ || echo "No lib directory"
 
       - name: Install vsce only
         shell: bash
@@ -330,7 +348,11 @@ jobs:
 
       - name: Install dependencies for validation script
         shell: bash
-        run: npm ci --ignore-scripts
+        run: |
+          echo "Installing dependencies without postinstall scripts..."
+          npm ci --ignore-scripts
+          
+          echo "Note: SQLite3 binaries will be validated from within the VSIX package"
 
       - name: Run VSIX validation script
         shell: bash

@@ -56,14 +56,36 @@ try {
     }
     console.log(`SQLite3 lib directory found with files: ${libFiles.join(', ')}`);
 
-    // 3. Verify platform-specific binary
+    // 3. Verify platform-specific binary in multiple locations
     const expectedBinaryName = getPlatformBinaryName();
-    const binaryPath = path.join(extensionPath, 'binaries', expectedBinaryName);
-    console.log(`Checking for platform binary: ${binaryPath}`);
-    if (!fs.existsSync(binaryPath)) {
-        throw new Error(`Platform-specific binary not found: ${binaryPath}`);
+    
+    // Check in dist/binaries first (new location)
+    const distBinaryPath = path.join(extensionPath, 'dist', 'binaries', expectedBinaryName);
+    console.log(`Checking for platform binary in dist: ${distBinaryPath}`);
+    
+    // Also check in root binaries (legacy location)
+    const rootBinaryPath = path.join(extensionPath, 'binaries', expectedBinaryName);
+    console.log(`Checking for platform binary in root: ${rootBinaryPath}`);
+    
+    // Also check if it's in the SQLite3 module itself
+    const moduleBinaryPath = path.join(extensionPath, 'node_modules', '@vscode', 'sqlite3', 'lib', expectedBinaryName);
+    console.log(`Checking for platform binary in module: ${moduleBinaryPath}`);
+    
+    let foundBinary = false;
+    if (fs.existsSync(distBinaryPath)) {
+        console.log(`Platform-specific binary found in dist/binaries: ${expectedBinaryName}`);
+        foundBinary = true;
+    } else if (fs.existsSync(rootBinaryPath)) {
+        console.log(`Platform-specific binary found in binaries: ${expectedBinaryName}`);
+        foundBinary = true;
+    } else if (fs.existsSync(moduleBinaryPath)) {
+        console.log(`Platform-specific binary found in SQLite3 module: ${expectedBinaryName}`);
+        foundBinary = true;
     }
-    console.log(`Platform-specific binary found: ${expectedBinaryName}`);
+    
+    if (!foundBinary) {
+        throw new Error(`Platform-specific binary not found in any expected location for: ${expectedBinaryName}`);
+    }
 
     // 4. Execute a smoke test: try to require the module
     console.log('Running smoke test: attempting to require the sqlite3 module...');
