@@ -194,10 +194,39 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare binaries for packaging
+        shell: bash
+        run: |
+          # Create the directory structure that the extension expects
+          mkdir -p dist/binaries/
+          
+          # Copy all platform binaries to dist/binaries/
+          cp binaries/vscode-sqlite3-linux-x64.node dist/binaries/ 2>/dev/null || echo "Linux binary not found"
+          cp binaries/vscode-sqlite3-win32-x64.node dist/binaries/ 2>/dev/null || echo "Windows binary not found"
+          cp binaries/vscode-sqlite3-darwin-universal2.node dist/binaries/ 2>/dev/null || echo "macOS universal binary not found"
+          
+          echo "Binaries prepared for packaging:"
+          ls -la dist/binaries/
+
       - name: Install production dependencies and vsce
         shell: bash
         run: |
-          npm ci --omit=dev
+          # Clear npm cache to avoid issues
+          npm cache clean --force
+          
+          # Install dependencies without scripts first
+          npm ci --omit=dev --ignore-scripts
+          
+          # Copy our pre-built binaries to the right location
+          mkdir -p node_modules/@vscode/sqlite3/build/Release/
+          
+          # Copy the universal2 binary to where sqlite3 expects it
+          if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
+            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
+            echo "Copied universal2 binary to sqlite3 module"
+          fi
+          
+          # Install vsce globally
           npm install -g @vscode/vsce
 
       - name: Verify vsce installation
