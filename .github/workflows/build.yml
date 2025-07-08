@@ -274,7 +274,7 @@ jobs:
           else
             echo "❌ Normal packaging failed, trying without prepublish script..."
             # Option 2: Skip prepublish script if it fails
-            vsce package --no-yarn --skip-duplicate --out claude-context-manager.vsix
+            vsce package --no-yarn --out claude-context-manager.vsix
           fi
           
           # Verify the package was created

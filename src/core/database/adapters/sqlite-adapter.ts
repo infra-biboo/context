@@ -63,7 +63,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     async disconnect(): Promise<void> {
         return new Promise((resolve, reject) => {
             if (this.db) {
-                this.db.close((err) => {
+                this.db.close((err: any) => {
                     if (err) {
                         Logger.error('Failed to disconnect SQLiteAdapter:', err);
                         reject(err);
@@ -105,7 +105,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 );
                 CREATE INDEX IF NOT EXISTS idx_contexts_timestamp ON contexts(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_contexts_project_path ON contexts(projectPath);
-            `, (err) => {
+            `, (err: any) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -121,7 +121,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 `INSERT INTO contexts (id, projectPath, type, content, timestamp, importance, tags)
                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 [id, entry.projectPath, entry.type, entry.content, timestamp, entry.importance, JSON.stringify(entry.tags)],
-                (err) => {
+                (err: any) => {
                     if (err) reject(err);
                     else resolve(id);
                 }
@@ -135,7 +135,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 `INSERT INTO contexts (id, projectPath, type, content, timestamp, importance, tags)
                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 [entry.id, entry.projectPath, entry.type, entry.content, entry.timestamp.toISOString(), entry.importance, JSON.stringify(entry.tags)],
-                (err) => {
+                (err: any) => {
                     if (err) reject(err);
                     else resolve();
                 }
@@ -145,7 +145,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getContextById(id: string): Promise<ContextEntry | undefined> {
         return new Promise((resolve, reject) => {
-            this.db!.get('SELECT * FROM contexts WHERE id = ?', [id], (err, row: ContextRow | undefined) => {
+            this.db!.get('SELECT * FROM contexts WHERE id = ?', [id], (err: any, row: ContextRow | undefined) => {
                 if (err) reject(err);
                 else resolve(row ? this.rowToContextEntry(row) : undefined);
             });
@@ -173,7 +173,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 params.push(options.offset);
             }
             
-            this.db!.all(query, params, (err, rows: ContextRow[]) => {
+            this.db!.all(query, params, (err: any, rows: ContextRow[]) => {
                 if (err) reject(err);
                 else resolve(rows.map(this.rowToContextEntry));
             });
@@ -185,7 +185,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         const values = Object.values(updates).map(v => Array.isArray(v) ? JSON.stringify(v) : v);
 
         return new Promise((resolve, reject) => {
-            this.db!.run(`UPDATE contexts SET ${fields} WHERE id = ?`, [...values, id], (err) => {
+            this.db!.run(`UPDATE contexts SET ${fields} WHERE id = ?`, [...values, id], (err: any) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -194,7 +194,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async deleteContext(id: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.db!.run('DELETE FROM contexts WHERE id = ?', [id], (err) => {
+            this.db!.run('DELETE FROM contexts WHERE id = ?', [id], (err: any) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -217,7 +217,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
             sql += ' ORDER BY timestamp DESC';
 
-            this.db!.all(sql, params, (err, rows: ContextRow[]) => {
+            this.db!.all(sql, params, (err: any, rows: ContextRow[]) => {
                 if (err) reject(err);
                 else resolve(rows.map(this.rowToContextEntry));
             });
@@ -232,7 +232,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 query += ' WHERE type = ?';
                 params.push(options.type);
             }
-            this.db!.get(query, params, (err, row: { count: number }) => {
+            this.db!.get(query, params, (err: any, row: { count: number }) => {
                 if (err) reject(err);
                 else resolve(row.count);
             });
@@ -256,7 +256,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                     JSON.stringify(agent.specializations), agent.color, 
                     agent.enabled ? 1 : 0, agent.isCustom ? 1 : 0, agent.prompt
                 ],
-                (err) => {
+                (err: any) => {
                     if (err) reject(err);
                     else resolve(agent);
                 }
@@ -266,7 +266,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getAgentById(id: string): Promise<DatabaseAgent | undefined> {
         return new Promise((resolve, reject) => {
-            this.db!.get('SELECT * FROM agents WHERE id = ?', [id], (err, row: AgentRow | undefined) => {
+            this.db!.get('SELECT * FROM agents WHERE id = ?', [id], (err: any, row: AgentRow | undefined) => {
                 if (err) reject(err);
                 else resolve(row ? this.rowToAgent(row) : undefined);
             });
@@ -275,7 +275,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getAllAgents(): Promise<DatabaseAgent[]> {
         return new Promise((resolve, reject) => {
-            this.db!.all('SELECT * FROM agents ORDER BY isCustom ASC, name ASC', (err, rows: AgentRow[]) => {
+            this.db!.all('SELECT * FROM agents ORDER BY isCustom ASC, name ASC', (err: any, rows: AgentRow[]) => {
                 if (err) reject(err);
                 else resolve(rows.map(this.rowToAgent));
             });
@@ -291,7 +291,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         });
 
         return new Promise((resolve, reject) => {
-            this.db!.run(`UPDATE agents SET ${fields} WHERE id = ?`, [...values, id], (err) => {
+            this.db!.run(`UPDATE agents SET ${fields} WHERE id = ?`, [...values, id], (err: any) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -304,7 +304,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         if (!agent.isCustom) throw new Error(`Cannot delete standard agent: ${agent.name}`);
 
         return new Promise((resolve, reject) => {
-            this.db!.run('DELETE FROM agents WHERE id = ?', [id], (err) => {
+            this.db!.run('DELETE FROM agents WHERE id = ?', [id], (err: any) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -333,7 +333,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     private async getGroupedCount(field: 'type' | 'projectPath'): Promise<Record<string, number>> {
         return new Promise((resolve, reject) => {
-            this.db!.all(`SELECT ${field}, COUNT(*) as count FROM contexts GROUP BY ${field}`, (err, rows: any[]) => {
+            this.db!.all(`SELECT ${field}, COUNT(*) as count FROM contexts GROUP BY ${field}`, (err: any, rows: any[]) => {
                 if (err) reject(err);
                 else {
                     const result: Record<string, number> = {};
