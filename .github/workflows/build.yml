@@ -1,4 +1,3 @@
-# .github/workflows/build-and-package.yml
 name: Build & Package Multi-Platform VSIX
 
 on:
@@ -88,7 +87,8 @@ jobs:
 
       - name: Confirm ARM64 runner
         shell: bash
-        run: echo "macOS ARM64 runner"
+        run: |
+          echo "macOS ARM64 runner"
 
       - name: Install dependencies without scripts
         shell: bash
@@ -113,21 +113,40 @@ jobs:
   # 3) Create macOS Universal2 & package VSIX
   package-vsix:
     name: Download binaries & package VSIX
-    runs-on: macos-13  # use Intel runner with lipo available
+    runs-on: macos-13  # Intel runner with lipo
     needs: [build-binaries-x64, build-binaries-macos-arm64]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download all binaries
+      # Download each artifact flattening into binaries/
+      - name: Download Linux x64 binaries
         uses: actions/download-artifact@v4
         with:
-          path: binaries/
+          name: sqlite3-binaries-ubuntu-latest-x64
+          path: binaries
+
+      - name: Download Windows x64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-windows-latest-x64
+          path: binaries
+
+      - name: Download macOS Intel x64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-13-x64
+          path: binaries
+
+      - name: Download macOS ARM64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: sqlite3-binaries-macos-arm64
+          path: binaries
 
       - name: Install Xcode CLI Tools
         shell: bash
-        run: |
-          xcode-select --install || true
+        run: xcode-select --install || true
 
       - name: Create macOS Universal2
         shell: bash
