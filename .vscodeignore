@@ -18,3 +18,7 @@ binaries/**
 **/test/**
 **/tests/**
 coverage/**
+
+# Ensure SQLite3 is included
+!node_modules/@vscode/sqlite3/**
+!dist/binaries/**

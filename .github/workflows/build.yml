@@ -283,18 +283,27 @@ jobs:
           ls -la dist/ || echo "No dist directory found"
           ls -la node_modules/@vscode/sqlite3/ || echo "No SQLite3 module found"
           
-          # Package VSIX with proper options
+          # Package VSIX with SQLite3 included
           echo "Creating VSIX package..."
-          if vsce package --no-yarn --no-dependencies --out claude-context-manager.vsix; then
+          
+          # First, ensure SQLite3 has the correct structure for packaging
+          echo "Preparing SQLite3 module for packaging..."
+          if [ -f "node_modules/@vscode/sqlite3/package.json" ]; then
+            echo "✓ SQLite3 module found"
+            # Ensure the binary is in the right place
+            if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
+              mkdir -p node_modules/@vscode/sqlite3/lib
+              cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/lib/
+              echo "✓ Copied macOS binary to SQLite3 lib directory"
+            fi
+          fi
+          
+          if vsce package --no-yarn --out claude-context-manager.vsix; then
             echo "✓ VSIX package created successfully"
           else
             echo "❌ Primary packaging failed, trying with additional flags"
-            if vsce package --no-yarn --no-dependencies --allow-star-activation --skip-license --out claude-context-manager.vsix; then
+            if vsce package --no-yarn --allow-star-activation --skip-license --out claude-context-manager.vsix; then
               echo "✓ VSIX package created with additional flags"
-            else
-              echo "❌ All packaging attempts failed, attempting minimal packaging"
-              if vsce package --no-yarn --allow-star-activation --skip-license --out claude-context-manager.vsix; then
-                echo "✓ VSIX package created with minimal options"
               else
                 echo "❌ All packaging attempts failed"
                 echo "Package.json content:"
