@@ -283,13 +283,31 @@ jobs:
         run: |
           echo "Packaging VSIX..."
           
-          # Package without running prepublish script since we already built with webpack
-          if vsce package --no-yarn --no-dependencies --out claude-context-manager.vsix; then
+          # Temporarily switch to CI prepublish script
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          // Save the original script
+          const originalScript = pkg.scripts['vscode:prepublish'];
+          // Switch to CI version
+          pkg.scripts['vscode:prepublish'] = pkg.scripts['vscode:prepublish-ci'] || 'echo Skipping prepublish';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          console.log('Temporarily switched to CI prepublish script');
+          "
+          
+          # Package VSIX
+          if vsce package --no-yarn --out claude-context-manager.vsix; then
             echo "✓ VSIX package created successfully"
           else
             echo "❌ Packaging failed"
+            # Restore package.json before failing
+            git checkout -- package.json
             exit 1
           fi
+          
+          # Restore original package.json
+          git checkout -- package.json
+          echo "✓ Restored original package.json"
           
           # Verify the package was created
           if [ -f "claude-context-manager.vsix" ]; then
