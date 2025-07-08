@@ -44,15 +44,21 @@ try {
 
     const extensionPath = path.join(EXTRACT_PATH, 'extension');
 
-    // 2. Verify sqlite3 module exists (may not have lib directory in all cases)
+    // 2. Verify sqlite3 module exists
     const sqlite3ModulePath = path.join(extensionPath, 'node_modules', '@vscode', 'sqlite3');
     console.log(`Checking for sqlite3 module path: ${sqlite3ModulePath}`);
     
-    // For our dynamic loading strategy, we just need to verify binaries exist
-    // The module structure might vary based on how it's packaged
-    if (!fs.existsSync(path.join(extensionPath, 'dist', 'binaries'))) {
-        console.log('Warning: dist/binaries directory not found, checking alternative locations...');
+    if (!fs.existsSync(sqlite3ModulePath)) {
+        throw new Error(`SQLite3 module not found at: ${sqlite3ModulePath}`);
     }
+    
+    // Check for package.json to verify module integrity
+    const sqlite3PackageJson = path.join(sqlite3ModulePath, 'package.json');
+    if (!fs.existsSync(sqlite3PackageJson)) {
+        throw new Error(`SQLite3 package.json not found at: ${sqlite3PackageJson}`);
+    }
+    
+    console.log('✓ SQLite3 module found');
 
     // 3. Verify platform-specific binary in multiple locations
     const expectedBinaryName = getPlatformBinaryName();
@@ -85,27 +91,56 @@ try {
         throw new Error(`Platform-specific binary not found in any expected location for: ${expectedBinaryName}`);
     }
 
-    // 4. Simplified validation - just verify the critical binaries exist
-    console.log('Smoke test: verifying critical extension files...');
+    // 4. Execute a smoke test: try to require the module
+    console.log('Running smoke test: attempting to require the sqlite3 module...');
+    const testScriptContent = `
+        const path = require('path');
+        const extensionPath = process.argv[2];
+        const sqlite3Path = path.join(extensionPath, 'node_modules', '@vscode', 'sqlite3');
+        
+        try {
+            // Test dynamic require like the extension does
+            const sqlite3Module = eval('require')(sqlite3Path);
+            console.log('✓ SQLite3 module loaded successfully');
+            
+            // Try to access the sqlite3 property
+            const sqlite3 = sqlite3Module.verbose ? sqlite3Module.verbose() : sqlite3Module;
+            console.log('✓ SQLite3 API accessible');
+            
+            // Try to create an in-memory database
+            const db = new sqlite3.Database(':memory:', (err) => {
+                if (err) {
+                    console.error('❌ Failed to create in-memory database:', err.message);
+                    process.exit(1);
+                }
+                console.log('✓ In-memory database created successfully');
+                
+                // Close the database
+                db.close((closeErr) => {
+                    if (closeErr) {
+                        console.error('❌ Failed to close database:', closeErr.message);
+                        process.exit(1);
+                    }
+                    console.log('✓ Database closed successfully');
+                    console.log('✅ SQLite3 smoke test passed!');
+                    process.exit(0);
+                });
+            });
+        } catch (error) {
+            console.error('❌ Smoke test failed:', error.message);
+            console.error('Stack trace:', error.stack);
+            process.exit(1);
+        }
+    `;
     
-    // Check for main extension file
-    const mainExtensionFile = path.join(extensionPath, 'dist', 'extension.js');
-    if (!fs.existsSync(mainExtensionFile)) {
-        throw new Error(`Main extension file not found: ${mainExtensionFile}`);
-    }
-    console.log('✓ Main extension file found');
+    const testScriptPath = path.join(EXTRACT_PATH, 'smoke_test.js');
+    fs.writeFileSync(testScriptPath, testScriptContent);
     
-    // List all directories to understand the structure
-    console.log('\nExtension structure:');
-    console.log('- Root files:', fs.readdirSync(extensionPath).filter(f => fs.statSync(path.join(extensionPath, f)).isFile()).slice(0, 10));
-    console.log('- Root directories:', fs.readdirSync(extensionPath).filter(f => fs.statSync(path.join(extensionPath, f)).isDirectory()));
-    
-    if (fs.existsSync(path.join(extensionPath, 'dist'))) {
-        console.log('- dist contents:', fs.readdirSync(path.join(extensionPath, 'dist')).slice(0, 10));
-    }
-    
-    if (fs.existsSync(path.join(extensionPath, 'node_modules'))) {
-        console.log('- node_modules contains @vscode/sqlite3:', fs.existsSync(path.join(extensionPath, 'node_modules', '@vscode', 'sqlite3')));
+    try {
+        // Execute the smoke test in a new Node process
+        execSync(`node ${testScriptPath} ${extensionPath}`, { stdio: 'inherit' });
+    } catch (error) {
+        throw new Error('SQLite3 smoke test failed');
     }
 
     console.log('VSIX validation successful!');
