@@ -164,7 +164,8 @@
     "mcp-bridge": "node dist/mcp-bridge.js",
     "build:bridge": "tsc src/mcp/mcp-bridge.ts --outDir dist --target es2020 --module commonjs --esModuleInterop",
     "dev:ui": "webpack serve --mode development --config webpack.config.js",
-    "postinstall": "prebuild-install --fallback-to-build" 
+    "postinstall": "prebuild-install --fallback-to-build",
+    "test:vsix": "node scripts/validate-vsix.js claude-context-manager.vsix"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",

@@ -29,7 +29,8 @@ module.exports = [
       ]
     },
     externals: {
-      vscode: 'commonjs vscode'
+      vscode: 'commonjs vscode',
+      '@vscode/sqlite3': 'commonjs @vscode/sqlite3'
       // Note: @vscode/sqlite3 removed from externals - will be loaded dynamically
     },
     devtool: 'source-map',

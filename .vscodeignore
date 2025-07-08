@@ -4,7 +4,7 @@ src/**
 .gitignore
 webpack.config.js
 tsconfig.json
-node_modules/**
+
 *.vsix
 .github/**
 binaries/**

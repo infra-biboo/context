@@ -353,3 +353,35 @@ jobs:
         with:
           name: claude-context-manager.vsix
           path: claude-context-manager.vsix
+
+  # 4) Validate VSIX on multiple platforms
+  validate-vsix:
+    name: Validate VSIX on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: package-vsix # Depends on the VSIX being packaged
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: claude-context-manager.vsix
+          path: .
+
+      - name: Install dependencies for validation script
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Run VSIX validation script
+        shell: bash
+        run: npm run test:vsix

@@ -1,9 +1,6 @@
 
-// import * as sqlite3 from '@vscode/sqlite3';
 // Dynamic import to handle different platforms and paths
 let sqlite3: any;
-import * as path from 'path';
-import * as fs from 'fs/promises';
 import { BaseDatabaseAdapter } from '../database-adapter';
 import { ContextEntry, DatabaseAgent, SearchOptions, DatabaseStats, DatabaseConfig } from '../types';
 import { Logger } from '../../../utils/logger';
@@ -43,170 +40,18 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     }
 
     private async loadSQLite3(): Promise<any> {
-        const os = require('os');
-        const vscode = require('vscode');
-        
-        const platform = os.platform();
-        const arch = os.arch();
-        
-        Logger.info(`Platform: ${platform}, Architecture: ${arch}`);
-        
-        // Strategy 1: Try to load the full @vscode/sqlite3 module first
         try {
             const sqlite3Module = eval('require')('@vscode/sqlite3');
             Logger.info('✅ Successfully loaded @vscode/sqlite3 module');
             return sqlite3Module;
         } catch (error) {
-            Logger.warn('Failed to load @vscode/sqlite3 module, trying binary loading strategy:', error as Error);
+            const errorMessage = `Failed to load @vscode/sqlite3 module: ${(error as Error).message}. Please ensure it is correctly bundled and accessible.`;
+            Logger.error(errorMessage, error as Error);
+            throw new Error(errorMessage);
         }
-        
-        // Strategy 2: Create a custom module that mimics @vscode/sqlite3 structure
-        // by loading our compiled binary and wrapping it with the proper JavaScript layer
-        let extensionPath: string | undefined;
-        let binaryName: string = '';
-        
-        try {
-            extensionPath = vscode.extensions.getExtension('claude-dev.claude-context-manager')?.extensionPath;
-            if (extensionPath) {
-                Logger.info(`Extension path found: ${extensionPath}`);
-                
-                // List available binaries for debugging
-                try {
-                    const binariesDir = path.join(extensionPath, 'binaries');
-                    const availableBinaries = await fs.readdir(binariesDir).catch(() => []);
-                    Logger.info(`Available binaries: ${availableBinaries.join(', ')}`);
-                } catch (error) {
-                    Logger.warn('Could not list binaries directory');
-                }
-                
-                // Determine binary name based on platform
-                if (platform === 'win32') {
-                    binaryName = 'vscode-sqlite3-win32-x64.node';
-                } else if (platform === 'darwin') {
-                    // For macOS, prioritize universal2, then specific arch
-                    binaryName = 'vscode-sqlite3-darwin-universal2.node';
-                    const fallbackArch = arch === 'arm64' ? 'vscode-sqlite3-darwin-arm64.node' : 'vscode-sqlite3-darwin-x64.node';
-                    
-                    // Try universal2 first, then specific arch
-                    const universalPath = path.join(extensionPath, 'binaries', binaryName);
-                    const archPath = path.join(extensionPath, 'binaries', fallbackArch);
-                    
-                    if (await fs.access(universalPath).then(() => true).catch(() => false)) {
-                        // Keep binaryName as universal2
-                    } else if (await fs.access(archPath).then(() => true).catch(() => false)) {
-                        binaryName = fallbackArch;
-                    } else {
-                        throw new Error(`No suitable macOS binary found`);
-                    }
-                } else {
-                    binaryName = 'vscode-sqlite3-linux-x64.node';
-                }
-                
-                const binaryPath = path.join(extensionPath, 'binaries', binaryName);
-                Logger.info(`Trying to load binary: ${binaryPath}`);
-                
-                try {
-                    await fs.access(binaryPath);
-                    Logger.info('✅ Binary file exists and is accessible');
-                    
-                    // Load the raw binary
-                    const rawBinding = eval('require')(binaryPath);
-                    Logger.info('✅ Successfully loaded raw SQLite3 binary');
-                    
-                    // Create a wrapper module that mimics the @vscode/sqlite3 structure
-                    const wrappedModule = this.createSQLiteWrapper(rawBinding);
-                    Logger.info('✅ Successfully created SQLite3 wrapper');
-                    return wrappedModule;
-                } catch (accessError) {
-                    Logger.error(`❌ Cannot access binary file: ${binaryPath}`, accessError as Error);
-                }
-            }
-        } catch (error) {
-            Logger.error('Strategy 2 failed:', error as Error);
-        }
-        
-        // Final failure - list what we tried
-        Logger.error(`Failed to load SQLite3 module for platform: ${platform}, arch: ${arch}`);
-        Logger.error(`Attempted paths:`);
-        if (extensionPath && binaryName) {
-            Logger.error(`  - Extension binaries: ${path.join(extensionPath, 'binaries', binaryName)}`);
-        }
-        const errorMessage = `Failed to load SQLite3 module. No suitable binary or module found for platform: ${platform}, arch: ${arch}`;
-        throw new Error(errorMessage);
     }
     
-    private createSQLiteWrapper(rawBinding: any): any {
-        // This function recreates the essential parts of @vscode/sqlite3's JavaScript wrapper
-        // Based on the structure found in node_modules/@vscode/sqlite3/lib/sqlite3.js
-        
-        const EventEmitter = require('events').EventEmitter;
-        
-        // Copy all constants and exports from raw binding
-        const wrappedModule = { ...rawBinding };
-        
-        // Add verbose function that returns the module itself
-        wrappedModule.verbose = function() {
-            return wrappedModule;
-        };
-        
-        // Add cached database functionality
-        wrappedModule.cached = {
-            Database: function(file: string, a?: any, b?: any) {
-                if (file === '' || file === ':memory:') {
-                    return new wrappedModule.Database(file, a, b);
-                }
-                
-                let db: any;
-                const resolvedFile = path.resolve(file);
-                
-                if (!wrappedModule.cached.objects[resolvedFile]) {
-                    db = wrappedModule.cached.objects[resolvedFile] = new wrappedModule.Database(file, a, b);
-                } else {
-                    db = wrappedModule.cached.objects[resolvedFile];
-                    const callback = (typeof a === 'number') ? b : a;
-                    if (typeof callback === 'function') {
-                        const cb = () => callback.call(db, null);
-                        if (db.open) process.nextTick(cb);
-                        else db.once('open', cb);
-                    }
-                }
-                return db;
-            },
-            objects: {} as any
-        };
-        
-        // Enhance the Database constructor with event emitter capabilities
-        const OriginalDatabase = rawBinding.Database;
-        function EnhancedDatabase(this: any, ...args: any[]) {
-            EventEmitter.call(this);
-            const result = OriginalDatabase.apply(this, args);
-            
-            // Mark database as open after successful construction
-            process.nextTick(() => {
-                this.open = true;
-                this.emit('open');
-            });
-            
-            return result;
-        }
-        
-        // Set up proper inheritance
-        EnhancedDatabase.prototype = Object.create(EventEmitter.prototype);
-        EnhancedDatabase.prototype.constructor = EnhancedDatabase;
-        
-        // Copy all methods from original Database prototype
-        const originalProto = OriginalDatabase.prototype;
-        for (const key in originalProto) {
-            if (originalProto.hasOwnProperty(key) && key !== 'constructor') {
-                EnhancedDatabase.prototype[key] = originalProto[key];
-            }
-        }
-        
-        wrappedModule.Database = EnhancedDatabase;
-        
-        Logger.info('✅ Created SQLite3 wrapper module with enhanced functionality');
-        return wrappedModule;
-    }
+    
 
     async connect(): Promise<void> {
         if (this.isConnectedFlag) {
@@ -225,9 +70,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 }
             }
             
-            const dbPath = this.config!.path;
-            await fs.mkdir(path.dirname(dbPath), { recursive: true });
             
+            
+            const dbPath = this.config!.path;
             // Use verbose mode to get the enhanced database
             const verboseSQLite = sqlite3.verbose ? sqlite3.verbose() : sqlite3;
             this.db = new verboseSQLite.Database(dbPath);
@@ -514,17 +359,10 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         const byType = await this.getGroupedCount('type');
         const byProject = await this.getGroupedCount('projectPath');
         
-        let storageSize: number | undefined;
-        try {
-            const stats = await fs.stat(this.config!.path);
-            storageSize = stats.size;
-        } catch (error) { /* ignore */ }
-
         return {
             totalContexts,
             byType,
             byProject,
-            storageSize,
             adapterType: 'sqlite'
         };
     }
