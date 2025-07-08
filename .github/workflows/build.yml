@@ -1,3 +1,4 @@
+# .github/workflows/build-and-package.yml
 name: Build & Package Multi-Platform VSIX
 
 on:
@@ -49,11 +50,13 @@ jobs:
 
       - name: Install dependencies without scripts
         shell: bash
-        run: npm ci --ignore-scripts
+        run: |
+          npm ci --ignore-scripts
 
       - name: Build sqlite3 binding (x64)
         shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
+        run: |
+          npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
 
       - name: Copy x64 .node
         shell: bash
@@ -64,13 +67,14 @@ jobs:
       - name: Upload x64 binaries
         uses: actions/upload-artifact@v4
         with:
-          name: sqlite3-binaries-${{ matrix.os }}-x64
+          name: sqlite3-binaries-ubuntu-latest-x64
           path: binaries/
 
   # 2) Build arm64 macOS binary on GitHub-hosted ARM64 runner
   build-binaries-macos-arm64:
     name: Build sqlite3 on macOS-arm64
     runs-on: macos-14
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -92,11 +96,13 @@ jobs:
 
       - name: Install dependencies without scripts
         shell: bash
-        run: npm ci --ignore-scripts
+        run: |
+          npm ci --ignore-scripts
 
       - name: Build sqlite3 binding (arm64)
         shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
+        run: |
+          npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
 
       - name: Copy arm64 .node
         shell: bash
@@ -113,13 +119,13 @@ jobs:
   # 3) Create macOS Universal2 & package VSIX
   package-vsix:
     name: Download binaries & package VSIX
-    runs-on: macos-13  # Intel runner with lipo
+    runs-on: macos-13    # Intel runner with lipo
     needs: [build-binaries-x64, build-binaries-macos-arm64]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Download each artifact flattening into binaries/
       - name: Download Linux x64 binaries
         uses: actions/download-artifact@v4
         with:
@@ -146,7 +152,8 @@ jobs:
 
       - name: Install Xcode CLI Tools
         shell: bash
-        run: xcode-select --install || true
+        run: |
+          xcode-select --install || true
 
       - name: Create macOS Universal2
         shell: bash
@@ -158,11 +165,13 @@ jobs:
 
       - name: Install production deps
         shell: bash
-        run: npm ci --omit=dev
+        run: |
+          npm ci --omit=dev --ignore-scripts
 
       - name: Package VSIX
         shell: bash
-        run: npx vsce package --out claude-context-manager.vsix
+        run: |
+          npx vsce package --out claude-context-manager.vsix
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
