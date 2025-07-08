@@ -30,35 +30,40 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install build tools
+      - name: Install build tools on Linux
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y build-essential
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            # macOS hosted runners include Xcode CLI
-            echo "Using preinstalled Xcode CLI"
-          elif [ "$RUNNER_OS" = "Windows" ]; then
-            choco install python --version=3.9.0 -y
-          fi
+          sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Confirm Xcode CLI on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "Using pre-installed Xcode Command Line Tools"
+
+      - name: Install Python on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install python --version=3.9.0 -y
 
       - name: Install dependencies and build native binding
+        shell: bash
         run: |
-          case "${RUNNER_OS}" in
-            Linux)     npm ci ;;  
-            Windows)   npm ci ;;  
-            macOS)     npm install --build-from-source=@vscode/sqlite3 --fallback-to-build ;;  
-          esac
+          npm ci
 
       - name: Copy compiled .node to binaries/
+        shell: bash
         run: |
           mkdir -p binaries
-          node -e "
-            const fs = require('fs'), path = require('path'), os = require('os');
+          node -e '
+            const fs = require("fs"), path = require("path"), os = require("os");
             const plat = os.platform(), arch = os.arch();
-            const src = path.join('node_modules','@vscode','sqlite3','build','Release','vscode-sqlite3.node');
-            const dst = path.join('binaries', `vscode-sqlite3-${plat}-${arch}.node`);
+            const src = path.join("node_modules","@vscode","sqlite3","build","Release","vscode-sqlite3.node");
+            const dst = path.join("binaries", `vscode-sqlite3-${plat}-${arch}.node`);
             fs.copyFileSync(src, dst);
-          "
+          '
 
       - name: Upload x64 binaries
         uses: actions/upload-artifact@v4
@@ -84,24 +89,27 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Xcode CLI on macOS ARM
+      - name: Confirm Xcode CLI on macOS ARM
+        shell: bash
         run: |
-          # Xcode CLI on self-hosted Apple Silicon
           xcode-select --install || true
 
       - name: Install dependencies and build native binding
-        run: npm ci
+        shell: bash
+        run: |
+          npm ci
 
       - name: Copy compiled .node to binaries/
+        shell: bash
         run: |
           mkdir -p binaries
-          node -e "
-            const fs = require('fs'), path = require('path'), os = require('os');
+          node -e '
+            const fs = require("fs"), path = require("path"), os = require("os");
             const plat = os.platform(), arch = os.arch();
-            const src = path.join('node_modules','@vscode','sqlite3','build','Release','vscode-sqlite3.node');
-            const dst = path.join('binaries', `vscode-sqlite3-${plat}-${arch}.node`);
+            const src = path.join("node_modules","@vscode","sqlite3","build","Release","vscode-sqlite3.node");
+            const dst = path.join("binaries", `vscode-sqlite3-${plat}-${arch}.node`);
             fs.copyFileSync(src, dst);
-          "
+          '
 
       - name: Upload arm64 macOS binary
         uses: actions/upload-artifact@v4
@@ -124,9 +132,11 @@ jobs:
           path: binaries/
 
       - name: Install production dependencies
+        shell: bash
         run: npm ci --omit=dev
 
       - name: Package VSIX
+        shell: bash
         run: npx vsce package --out claude-context-manager.vsix
 
       - name: Upload VSIX
