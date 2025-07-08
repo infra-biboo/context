@@ -17,16 +17,37 @@ import { registerTokenCommands } from './commands/token-commands';
 import { registerMCPTestCommands } from './commands/mcp-test-commands';
 
 export async function activate(context: vscode.ExtensionContext) {
-    Logger.initialize();
-    Logger.info('Claude Context Manager activating...');
+    console.log('🚀 Claude Context Manager: Starting activation...');
+    
+    try {
+        Logger.initialize();
+        Logger.info('Claude Context Manager activating...');
+        console.log('✅ Logger initialized successfully');
+    } catch (error) {
+        console.error('❌ Failed to initialize logger:', error);
+        vscode.window.showErrorMessage('Failed to initialize logger');
+        return;
+    }
     
     // Initialize database with new adapter architecture
-    const database = new ContextDatabase(context);
+    console.log('📦 Creating ContextDatabase instance...');
+    let database: ContextDatabase;
+    try {
+        database = new ContextDatabase(context);
+        console.log('✅ ContextDatabase instance created');
+    } catch (error) {
+        console.error('❌ Failed to create ContextDatabase:', error);
+        vscode.window.showErrorMessage('Failed to create database instance');
+        return;
+    }
     
+    console.log('🔄 Initializing database...');
     try {
         await database.initialize();
         Logger.info('Database initialized successfully');
+        console.log('✅ Database initialized successfully');
     } catch (error) {
+        console.error('❌ Database initialization failed:', error);
         Logger.error('Database initialization failed:', error as Error);
         vscode.window.showErrorMessage(
             'Failed to initialize database. Some features may be unavailable.'
@@ -81,24 +102,40 @@ export async function activate(context: vscode.ExtensionContext) {
     const tokenMonitor = new SimpleTokenMonitor();
     
     // Register webview provider
-    const webviewProvider = new ContextWebviewProvider(
-        context.extensionUri,
-        database,
-        configStore,
-        autoCapture,
-        agentManager,
-        mcpServer,
-        mcpConfigGenerator,
-        tokenMonitor,
-        context
-    );
+    console.log('🖥️ Creating webview provider...');
+    let webviewProvider;
+    try {
+        webviewProvider = new ContextWebviewProvider(
+            context.extensionUri,
+            database,
+            configStore,
+            autoCapture,
+            agentManager,
+            mcpServer,
+            mcpConfigGenerator,
+            tokenMonitor,
+            context
+        );
+        console.log('✅ Webview provider created successfully');
+    } catch (error) {
+        console.error('❌ Failed to create webview provider:', error);
+        vscode.window.showErrorMessage('Failed to create webview provider');
+        return;
+    }
     
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
+    console.log('📝 Registering webview provider...');
+    try {
+        const registration = vscode.window.registerWebviewViewProvider(
             ContextWebviewProvider.viewType,
             webviewProvider
-        )
-    );
+        );
+        context.subscriptions.push(registration);
+        console.log('✅ Webview provider registered successfully');
+    } catch (error) {
+        console.error('❌ Failed to register webview provider:', error);
+        vscode.window.showWarningMessage('Failed to register webview provider - extension will continue without UI panel');
+        // Continue without the webview
+    }
     
     // Register commands
     registerCommands(context);
@@ -123,6 +160,8 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     
     Logger.info('Claude Context Manager activated successfully');
+    console.log('🎉 Claude Context Manager activated successfully!');
+    vscode.window.showInformationMessage('Claude Context Manager loaded successfully!');
 }
 
 export function deactivate() {

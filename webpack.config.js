@@ -130,8 +130,7 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
-          // Copy SQLite3 binaries to dist for direct loading
-          { from: 'node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node', to: 'vscode-sqlite3.node', noErrorOnMissing: true },
+          // SQLite3 binaries are managed by CI pipeline, no need to copy here
           // No need to copy index.html as it's generated in the provider
         ],
       }),
