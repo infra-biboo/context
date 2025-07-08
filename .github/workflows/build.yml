@@ -304,14 +304,13 @@ jobs:
             echo "❌ Primary packaging failed, trying with additional flags"
             if vsce package --no-yarn --allow-star-activation --skip-license --out claude-context-manager.vsix; then
               echo "✓ VSIX package created with additional flags"
-              else
-                echo "❌ All packaging attempts failed"
-                echo "Package.json content:"
-                cat package.json
-                echo "Extension structure:"
-                find . -name "*.js" -path "./dist/*" | head -10
-                exit 1
-              fi
+            else
+              echo "❌ All packaging attempts failed"
+              echo "Package.json content:"
+              cat package.json
+              echo "Extension structure:"
+              find . -name "*.js" -path "./dist/*" | head -10
+              exit 1
             fi
           fi
           
