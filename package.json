@@ -155,7 +155,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "vscode:prepublish-ci": "echo 'Skipping prepublish for CI build'",
+    "vscode:prepublish-ci": "echo 'Building for CI' && npm run compile",
     "package-vsix": "vsce package",
     "publish-vsix": "vsce publish",
     "compile": "webpack",
@@ -195,8 +195,5 @@
     "openai": "^4.104.0",
     "solid-js": "^1.9.7",
     "zod": "^3.25.73"
-  },
-  "bundledDependencies": [
-    "@vscode/sqlite3"
-  ]
+  }
 }

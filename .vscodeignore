@@ -6,3 +6,15 @@ webpack.config.js
 tsconfig.json
 node_modules/**
 *.vsix
+.github/**
+binaries/**
+*.log
+*.map
+*.md
+!README.md
+.env*
+**/*.test.ts
+**/*.spec.ts
+**/test/**
+**/tests/**
+coverage/**

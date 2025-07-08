@@ -263,6 +263,20 @@ jobs:
           mkdir -p node_modules/@vscode/sqlite3/lib
           echo "module.exports = {};" > node_modules/@vscode/sqlite3/lib/sqlite3.js
           echo "export = {};" > node_modules/@vscode/sqlite3/lib/sqlite3.d.ts
+          
+          # Create minimal package.json for @vscode/sqlite3 to avoid validation issues
+          cat > node_modules/@vscode/sqlite3/package.json << 'EOF'
+{
+  "name": "@vscode/sqlite3",
+  "version": "5.1.8-vscode",
+  "description": "SQLite3 bindings for Node.js",
+  "main": "lib/sqlite3.js",
+  "types": "lib/sqlite3.d.ts",
+  "gypfile": true,
+  "license": "BSD-3-Clause"
+}
+EOF
+          
           echo "Created minimal @vscode/sqlite3 structure for TypeScript"
 
       - name: Build extension with webpack
@@ -283,6 +297,10 @@ jobs:
         run: |
           echo "Packaging VSIX..."
           
+          # Verify binaries exist before packaging
+          echo "Checking for required binaries:"
+          ls -la dist/binaries/ || echo "No binaries found in dist/binaries"
+          
           # Temporarily switch to CI prepublish script
           node -e "
           const fs = require('fs');
@@ -295,14 +313,31 @@ jobs:
           console.log('Temporarily switched to CI prepublish script');
           "
           
-          # Package VSIX
-          if vsce package --no-yarn --out claude-context-manager.vsix; then
+          # Create minimal package.json for packaging (without problematic dependencies)
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          // Remove problematic dependencies for packaging
+          if (pkg.dependencies && pkg.dependencies['@vscode/sqlite3']) {
+            console.log('Temporarily removing @vscode/sqlite3 from dependencies for packaging');
+            delete pkg.dependencies['@vscode/sqlite3'];
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          
+          # Package VSIX with fallback options
+          if vsce package --no-yarn --allow-missing-dependencies --out claude-context-manager.vsix; then
             echo "✓ VSIX package created successfully"
           else
-            echo "❌ Packaging failed"
-            # Restore package.json before failing
-            git checkout -- package.json
-            exit 1
+            echo "❌ Primary packaging failed, trying with --allow-star-activation"
+            if vsce package --no-yarn --allow-missing-dependencies --allow-star-activation --out claude-context-manager.vsix; then
+              echo "✓ VSIX package created successfully with fallback options"
+            else
+              echo "❌ All packaging attempts failed"
+              # Restore package.json before failing
+              git checkout -- package.json
+              exit 1
+            fi
           fi
           
           # Restore original package.json

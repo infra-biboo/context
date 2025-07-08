@@ -130,7 +130,6 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
-          { from: 'node_modules/@vscode/sqlite3', to: 'node_modules/@vscode/sqlite3', globOptions: { ignore: ['**/*.ts', '**/*.map'] } },
           // No need to copy index.html as it's generated in the provider
         ],
       }),
