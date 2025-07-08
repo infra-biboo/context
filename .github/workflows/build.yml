@@ -48,10 +48,15 @@ jobs:
         run: |
           choco install python --version=3.9.0 -y
 
-      - name: Install dependencies and build native binding
+      - name: Install dependencies without scripts
         shell: bash
         run: |
-          npm ci
+          npm ci --ignore-scripts
+
+      - name: Build sqlite3 native binding from source
+        shell: bash
+        run: |
+          npm rebuild @vscode/sqlite3 --build-from-source
 
       - name: Copy compiled .node to binaries/
         shell: bash
@@ -94,10 +99,15 @@ jobs:
         run: |
           xcode-select --install || true
 
-      - name: Install dependencies and build native binding
+      - name: Install dependencies without scripts
         shell: bash
         run: |
-          npm ci
+          npm ci --ignore-scripts
+
+      - name: Build sqlite3 native binding from source
+        shell: bash
+        run: |
+          npm rebuild @vscode/sqlite3 --build-from-source
 
       - name: Copy compiled .node to binaries/
         shell: bash
