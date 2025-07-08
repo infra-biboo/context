@@ -55,11 +55,17 @@ jobs:
         shell: bash
         run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
 
-      - name: Copy x64 .node
+      - name: Copy x64 .node with correct naming
         shell: bash
         run: |
           mkdir -p binaries
-          cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-x64.node
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-linux-x64.node
+          elif [ "${{ runner.os }}" == "Windows" ]; then
+            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-win32-x64.node
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-x64.node
+          fi
 
       - name: Upload x64 binaries
         uses: actions/upload-artifact@v4
@@ -119,6 +125,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js v20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       # Download each artifact flattening into binaries/
       - name: Download Linux x64 binaries
         uses: actions/download-artifact@v4
@@ -144,25 +155,62 @@ jobs:
           name: sqlite3-binaries-macos-arm64
           path: binaries
 
-      - name: Install Xcode CLI Tools
+      # Verificar que los archivos existan antes de continuar
+      - name: List downloaded binaries
         shell: bash
-        run: xcode-select --install || true
+        run: |
+          echo "Downloaded binaries:"
+          ls -la binaries/
+          echo "Checking required files:"
+          ls -la binaries/vscode-sqlite3-*.node || echo "Some binary files missing"
+
+      - name: Install Xcode CLI Tools (if needed)
+        shell: bash
+        run: |
+          # Check if Xcode CLI tools are already installed
+          if ! xcode-select -p &> /dev/null; then
+            echo "Installing Xcode CLI tools..."
+            xcode-select --install
+            # Wait for installation to complete
+            until xcode-select -p &> /dev/null; do
+              sleep 5
+            done
+          else
+            echo "Xcode CLI tools already installed"
+          fi
 
       - name: Create macOS Universal2
         shell: bash
         run: |
-          lipo -create \
-            binaries/vscode-sqlite3-darwin-x64.node \
-            binaries/vscode-sqlite3-darwin-arm64.node \
-            -output binaries/vscode-sqlite3-darwin-universal2.node
+          if [ -f "binaries/vscode-sqlite3-darwin-x64.node" ] && [ -f "binaries/vscode-sqlite3-darwin-arm64.node" ]; then
+            lipo -create \
+              binaries/vscode-sqlite3-darwin-x64.node \
+              binaries/vscode-sqlite3-darwin-arm64.node \
+              -output binaries/vscode-sqlite3-darwin-universal2.node
+            echo "Universal2 binary created successfully"
+            lipo -info binaries/vscode-sqlite3-darwin-universal2.node
+          else
+            echo "Error: Required macOS binaries not found"
+            exit 1
+          fi
 
-      - name: Install production deps
+      - name: Install production dependencies and vsce
         shell: bash
-        run: npm ci --omit=dev
+        run: |
+          npm ci --omit=dev
+          npm install -g @vscode/vsce
+
+      - name: Verify vsce installation
+        shell: bash
+        run: vsce --version
 
       - name: Package VSIX
         shell: bash
-        run: npx vsce package --out claude-context-manager.vsix
+        run: |
+          echo "Packaging VSIX..."
+          vsce package --out claude-context-manager.vsix
+          echo "VSIX package created successfully"
+          ls -la claude-context-manager.vsix
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
