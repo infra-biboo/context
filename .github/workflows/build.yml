@@ -245,47 +245,12 @@ jobs:
         run: |
           echo "Setting up SQLite3 binaries for dynamic loading strategy..."
           
-          # Create dist directory structure (matches webpack output)
-          mkdir -p dist/
+          # SQLite3 binaries are now exclusively managed in dist/binaries/
+          # No need to copy to dist/ root or set up webpack CopyPlugin paths
+          # The sqlite-adapter.ts has been updated to look in dist/binaries/ first
           
-          # Copy the primary binary that webpack will copy (for local node_modules)
-          # This ensures the webpack CopyPlugin finds the binary to copy
-          mkdir -p node_modules/@vscode/sqlite3/build/Release/
-          
-          # Copy the universal/fallback binary for webpack to pick up
-          if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
-            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-            echo "✓ Set up universal binary for webpack CopyPlugin"
-          elif [ -f "binaries/vscode-sqlite3-linux-x64.node" ]; then
-            cp binaries/vscode-sqlite3-linux-x64.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-            echo "✓ Set up Linux binary for webpack CopyPlugin"
-          elif [ -f "binaries/vscode-sqlite3-win32-x64.node" ]; then
-            cp binaries/vscode-sqlite3-win32-x64.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-            echo "✓ Set up Windows binary for webpack CopyPlugin"
-          fi
-          
-          # Also copy platform-specific binaries to dist for the dynamic loader
-          if [ -f "binaries/vscode-sqlite3-linux-x64.node" ]; then
-            cp binaries/vscode-sqlite3-linux-x64.node dist/vscode-sqlite3-linux-x64.node
-            echo "✓ Copied Linux x64 binary to dist"
-          fi
-          
-          if [ -f "binaries/vscode-sqlite3-win32-x64.node" ]; then
-            cp binaries/vscode-sqlite3-win32-x64.node dist/vscode-sqlite3-win32-x64.node
-            echo "✓ Copied Windows x64 binary to dist"
-          fi
-          
-          if [ -f "binaries/vscode-sqlite3-darwin-x64.node" ]; then
-            cp binaries/vscode-sqlite3-darwin-x64.node dist/vscode-sqlite3-darwin-x64.node
-            echo "✓ Copied macOS Intel binary to dist"
-          fi
-          
-          if [ -f "binaries/vscode-sqlite3-darwin-arm64.node" ]; then
-            cp binaries/vscode-sqlite3-darwin-arm64.node dist/vscode-sqlite3-darwin-arm64.node
-            echo "✓ Copied macOS ARM64 binary to dist"
-          fi
-          
-          echo "✓ SQLite3 binaries ready for dynamic loading"
+          echo "✓ SQLite3 binaries already prepared in dist/binaries/ by previous step"
+          echo "✓ Dynamic loading will use CI-managed binaries only"
 
       - name: Build extension with webpack
         shell: bash

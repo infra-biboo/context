@@ -141,9 +141,16 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
             return;
         }
         try {
-            // Load SQLite3 dynamically
+            // Load SQLite3 dynamically with improved error handling
             if (!sqlite3) {
-                sqlite3 = await this.loadSQLite3();
+                try {
+                    sqlite3 = await this.loadSQLite3();
+                } catch (sqliteError) {
+                    Logger.error('Critical: Failed to load SQLite3 module. Extension will continue with limited functionality.', sqliteError as Error);
+                    // Don't throw - allow extension to load with degraded functionality
+                    this.isConnectedFlag = false;
+                    return;
+                }
             }
             
             const dbPath = this.config!.path;
@@ -155,9 +162,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
             this.isConnectedFlag = true;
             Logger.info(`SQLiteAdapter connected successfully to: ${dbPath}`);
         } catch (error) {
-            Logger.error('Failed to connect SQLiteAdapter:', error as Error);
+            Logger.error('Failed to connect SQLiteAdapter (non-critical):', error as Error);
             this.isConnectedFlag = false;
-            throw error;
+            // Don't throw - allow extension to continue without database
         }
     }
 
@@ -214,6 +221,10 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     }
 
     async addContext(entry: Omit<ContextEntry, 'id' | 'timestamp'>): Promise<string> {
+        if (!this.isConnectedFlag || !this.db) {
+            throw new Error('SQLite database is not available. Extension functionality is limited.');
+        }
+        
         const id = `ctx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
         const timestamp = new Date().toISOString();
         
@@ -231,6 +242,10 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     }
 
     async addMigratedContext(entry: ContextEntry): Promise<void> {
+        if (!this.isConnectedFlag || !this.db) {
+            throw new Error('SQLite database is not available. Extension functionality is limited.');
+        }
+        
         return new Promise((resolve, reject) => {
             this.db!.run(
                 `INSERT INTO contexts (id, projectPath, type, content, timestamp, importance, tags)
@@ -245,6 +260,10 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     }
 
     async getContextById(id: string): Promise<ContextEntry | undefined> {
+        if (!this.isConnectedFlag || !this.db) {
+            return undefined;
+        }
+        
         return new Promise((resolve, reject) => {
             this.db!.get('SELECT * FROM contexts WHERE id = ?', [id], (err: any, row?: any) => {
                 if (err) reject(err);
@@ -254,6 +273,10 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
     }
 
     async getContexts(options: SearchOptions = {}): Promise<ContextEntry[]> {
+        if (!this.isConnectedFlag || !this.db) {
+            return [];
+        }
+        
         return new Promise((resolve, reject) => {
             let query = 'SELECT * FROM contexts';
             const params: any[] = [];
