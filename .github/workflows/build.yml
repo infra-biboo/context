@@ -113,7 +113,7 @@ jobs:
   # 3) Create macOS Universal2 & package VSIX
   package-vsix:
     name: Download binaries & package VSIX
-    runs-on: ubuntu-latest
+    runs-on: macos-latest  # needs lipo available
     needs: [build-binaries-x64, build-binaries-macos-arm64]
     steps:
       - name: Checkout code
