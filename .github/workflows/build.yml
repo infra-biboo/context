@@ -42,11 +42,11 @@ jobs:
         run: |
           echo "Using pre-installed Xcode Command Line Tools"
 
-      - name: Install Python on Windows
+      - name: Confirm Python on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install python --version=3.9.0 -y
+          python --version
 
       - name: Install dependencies without scripts
         shell: bash
