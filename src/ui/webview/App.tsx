@@ -4,7 +4,6 @@ import { appController } from './core/app-controller';
 import GeneralTab from './features/general/GeneralTab';
 import AgentsTab from './features/agents/AgentsTab';
 import SearchTab from './features/search/SearchTab';
-import CreateTab from './features/create/CreateTab';
 import SettingsTab from './features/settings/SettingsTab';
 import OnboardingWizard from './features/onboarding/OnboardingWizard';
 import TokenUsageIndicator from './components/TokenUsageIndicator';
@@ -12,7 +11,7 @@ import { I18nProvider, useTranslation } from './i18n';
 import { Layout, Users, Search, Edit, Settings, CheckCircle, XCircle } from 'lucide-solid';
 import './style.css';
 
-type TabName = 'general' | 'agents' | 'search' | 'create' | 'settings';
+type TabName = 'general' | 'agents' | 'search' | 'settings';
 
 const AppContent: Component = () => {
   const { t } = useTranslation();
@@ -21,7 +20,6 @@ const AppContent: Component = () => {
     { id: 'general', label: t('common.general'), icon: <Layout size={16} /> },
     { id: 'agents', label: t('common.agents'), icon: <Users size={16} /> },
     { id: 'search', label: t('common.search'), icon: <Search size={16} /> },
-    { id: 'create', label: t('common.create'), icon: <Edit size={16} /> },
     { id: 'settings', label: t('common.settings'), icon: <Settings size={16} /> }
   ] as const;
 
@@ -47,6 +45,23 @@ const AppContent: Component = () => {
         // Si general no está disponible, usar el primer tab disponible
         actions.setActiveTab(tabs[0].id as any);
       }
+    }
+  });
+
+  // Auto-refresh effect when tab changes
+  createEffect(() => {
+    const currentTab = store.ui.activeTab;
+    
+    // Trigger refresh based on tab
+    switch (currentTab) {
+      case 'general':
+        // General tab has autoRefresh enabled in ContextList
+        break;
+      case 'search':
+        // Search tab has autoRefresh enabled in ContextList
+        break;
+      default:
+        break;
     }
   });
 
@@ -78,7 +93,6 @@ const AppContent: Component = () => {
               <Match when={store.ui.activeTab === 'general'}><GeneralTab /></Match>
               <Match when={store.ui.activeTab === 'agents'}><AgentsTab /></Match>
               <Match when={store.ui.activeTab === 'search'}><SearchTab /></Match>
-              <Match when={store.ui.activeTab === 'create'}><CreateTab /></Match>
               <Match when={store.ui.activeTab === 'settings'}><SettingsTab /></Match>
             </Switch>
           </main>

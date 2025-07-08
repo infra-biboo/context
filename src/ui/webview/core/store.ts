@@ -13,10 +13,17 @@ interface AppState {
   };
   ui: {
     isLoading: boolean;
-    activeTab: 'general' | 'agents' | 'search' | 'create' | 'settings';
+    activeTab: 'general' | 'agents' | 'search' | 'settings';
     errorMessage: string | null;
     successMessage: string | null;
     selectedAgentId: string | null;
+    searchPagination: {
+      currentPage: number;
+      pageSize: number;
+      hasMore: boolean;
+      isLoadingMore: boolean;
+      totalLoaded: number;
+    };
   };
   session: {
     onboardingCompleted: boolean;
@@ -45,6 +52,13 @@ const [state, setState] = createStore<AppState>({
     errorMessage: null,
     successMessage: null,
     selectedAgentId: null,
+    searchPagination: {
+      currentPage: 0,
+      pageSize: 1000,
+      hasMore: true,
+      isLoadingMore: false,
+      totalLoaded: 0,
+    },
   },
   session: {
     onboardingCompleted: false,
@@ -81,6 +95,25 @@ export const actions = {
   loadContexts: (contexts: ContextEntry[]) => setState('data', 'contexts', contexts),
   loadAgents: (agents: DatabaseAgent[]) => setState('data', 'agents', agents),
   setSearchResults: (results: ContextEntry[]) => setState('data', 'searchResults', results),
+  appendSearchResults: (results: ContextEntry[]) => {
+    setState('data', 'searchResults', (current) => [...current, ...results]);
+  },
+  resetSearchResults: () => {
+    setState('data', 'searchResults', []);
+    setState('ui', 'searchPagination', {
+      currentPage: 0,
+      pageSize: 1000,
+      hasMore: true,
+      isLoadingMore: false,
+      totalLoaded: 0,
+    });
+  },
+
+  // Search Pagination Actions
+  setLoadingMore: (isLoading: boolean) => setState('ui', 'searchPagination', 'isLoadingMore', isLoading),
+  incrementSearchPage: () => setState('ui', 'searchPagination', 'currentPage', (page) => page + 1),
+  setHasMore: (hasMore: boolean) => setState('ui', 'searchPagination', 'hasMore', hasMore),
+  updateTotalLoaded: (count: number) => setState('ui', 'searchPagination', 'totalLoaded', count),
 
   // Granular Context Actions (for efficient updates)
   addContext: (context: ContextEntry) => {
@@ -144,7 +177,14 @@ export const actions = {
       activeTab: 'general',
       errorMessage: null,
       successMessage: null,
-      selectedAgentId: null
+      selectedAgentId: null,
+      searchPagination: {
+        currentPage: 0,
+        pageSize: 1000,
+        hasMore: true,
+        isLoadingMore: false,
+        totalLoaded: 0,
+      },
     });
     // Clear data
     setState('data', {

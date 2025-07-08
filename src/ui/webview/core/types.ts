@@ -135,7 +135,12 @@ export type ToggleAgentPayload = { agentId: string };
 export type UpdateDatabaseConfigPayload = { config: DatabaseConfig };
 export type TestDatabaseConnectionPayload = { config: DatabaseConfig };
 
-export type SearchContextsPayload = { query: string; options?: any };
+export type SearchContextsPayload = { 
+  query: string; 
+  limit?: number;
+  offset?: number;
+  options?: any;
+};
 
 export type SetCollaborationModePayload = { mode: CollaborationMode };
 

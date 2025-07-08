@@ -1,9 +1,10 @@
-import { Component, createSignal, For, Show } from 'solid-js';
-import { Search, Lightbulb, AlertTriangle } from 'lucide-solid';
-import { store } from '../../core/store';
+import { Component, createSignal, Show } from 'solid-js';
+import { Search, AlertTriangle } from 'lucide-solid';
+import { store, actions } from '../../core/store';
 import { appController } from '../../core/app-controller';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Button from '../../components/Button';
+import ContextList from '../../components/ContextList';
 
 const SearchTab: Component = () => {
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -19,19 +20,18 @@ const SearchTab: Component = () => {
     if (searchQuery().trim()) {
       try {
         setHasSearched(true);
-        await appController.searchContexts(searchQuery());
+        actions.resetSearchResults();
+        // The ContextList component will handle the actual search with pagination
       } catch (error) {
         console.error('Search failed:', error);
       }
     }
   };
 
-  // Show all contexts initially, or search results after searching
-  const displayedContexts = () => {
-    if (hasSearched()) {
-      return store.data.searchResults;
-    }
-    return store.data.contexts;
+  const handleShowAll = () => {
+    setHasSearched(false);
+    setSearchQuery('');
+    actions.resetSearchResults();
   };
 
   const handleKeyPress = (e: KeyboardEvent) => {
@@ -86,68 +86,32 @@ const SearchTab: Component = () => {
           <LoadingSpinner text="Searching..." />
         </Show>
 
-        <Show when={displayedContexts().length === 0 && !store.ui.isLoading}>
-          <div class="empty-state">
-            <div class="empty-icon"><Search size={48} /></div>
-            <h3>{hasSearched() ? "No results found" : "No contexts yet"}</h3>
-            <p>{hasSearched() ? "Try adjusting your search query or filters" : "Create some contexts to see them here"}</p>
+        <Show when={hasSearched()}>
+          <div class="results-header">
+            <h3>Search Results ({store.data.searchResults.length})</h3>
+            <Button 
+              variant="secondary" 
+              size="small" 
+              onClick={handleShowAll}
+            >
+              Show All
+            </Button>
           </div>
+          <ContextList 
+            mode="search" 
+            searchQuery={searchQuery()}
+            autoRefresh={true}
+          />
         </Show>
 
-        <Show when={displayedContexts().length > 0}>
+        <Show when={!hasSearched()}>
           <div class="results-header">
-            <h3>{hasSearched() ? `Search Results (${displayedContexts().length})` : `All Contexts (${displayedContexts().length})`}</h3>
-            <Show when={hasSearched()}>
-              <Button 
-                variant="secondary" 
-                size="small" 
-                onClick={() => {
-                  setHasSearched(false);
-                  setSearchQuery('');
-                }}
-              >
-                Show All
-              </Button>
-            </Show>
+            <h3>All Contexts ({store.data.contexts.length})</h3>
           </div>
-          <div class="results-list">
-            <For each={displayedContexts()}>
-              {(context) => (
-                <div class={`context-card ${context.tags?.includes('eureka-capture') ? 'eureka-context' : ''}`}>
-                  <div class="context-header">
-                    {context.tags?.includes('eureka-capture') && <span class="eureka-icon"><Lightbulb size={16} /></span>}
-                    <span class="context-type">{context.type || 'unknown'}</span>
-                    <span class="context-project">{context.projectPath || 'no-project'}</span>
-                    <span class="context-timestamp">
-                      {context.timestamp ? new Date(context.timestamp).toLocaleDateString() : 'No date'}
-                    </span>
-                  </div>
-                  <div class="context-content">
-                    <p>{context.content || 'No content available'}</p>
-                  </div>
-                  <div class="context-tags">
-                    <For each={context.tags || []}>
-                      {(tag) => (
-                        <span class="tag">{tag}</span>
-                      )}
-                    </For>
-                  </div>
-                  <div class="context-actions">
-                    <span class="importance">
-                      Importance: {context.importance || 0}/10
-                    </span>
-                    <Button 
-                      size="small" 
-                      variant="danger"
-                      onClick={() => appController.deleteContext(context.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </For>
-          </div>
+          <ContextList 
+            mode="recent" 
+            autoRefresh={true}
+          />
         </Show>
       </div>
 

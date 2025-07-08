@@ -106,6 +106,20 @@ class AppController {
         }
     }
 
+    public async searchContextsPaginated(query: string, options: { limit: number; offset: number }) {
+        try {
+            const results = await bridge.sendRequest('context.search', { 
+                query, 
+                limit: options.limit, 
+                offset: options.offset 
+            });
+            return results;
+        } catch (error) {
+            console.error('Paginated search failed:', error);
+            throw error;
+        }
+    }
+
     public async deleteContext(contextId: string) {
         try {
             const result = await bridge.sendRequest('context.delete', { id: contextId });

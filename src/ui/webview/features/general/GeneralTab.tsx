@@ -8,6 +8,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import ContentCard from '../../components/ContentCard';
 import Button from '../../components/Button';
 import AddCustomContext from '../create/AddCustomContext';
+import ContextList from '../../components/ContextList';
 
 const GeneralTab: Component = () => {
   const { t } = useTranslation();
@@ -89,23 +90,11 @@ const GeneralTab: Component = () => {
 
       {/* Recent Contexts Card */}
       <ContentCard icon={<Clock size={20} />} title={t('general.recentContexts.title')}>
-        <div class="recent-contexts">
-          <Show when={store.data.contexts.length === 0} fallback={
-            <div class="contexts-list">
-              <For each={store.data.contexts.slice(0, 5)}>
-                {(context) => (
-                  <div class="context-item">
-                    <strong>{context.type?.toUpperCase() || t('general.recentContexts.unknown')}</strong>
-                    <div class="context-timestamp">{context.timestamp ? new Date(context.timestamp).toLocaleString() : 'No date'}</div>
-                    <div class="context-preview">{context.content?.substring(0, 100) || t('general.recentContexts.noContent')}...</div>
-                  </div>
-                )}
-              </For>
-            </div>
-          }>
-            <p>{t('general.recentContexts.noContexts')}</p>
-          </Show>
-        </div>
+        <ContextList 
+          mode="recent" 
+          maxItems={10} 
+          autoRefresh={true}
+        />
       </ContentCard>
 
       <Show when={Object.keys(computed.stats().byType).length > 0}>

@@ -145,7 +145,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getContextById(id: string): Promise<ContextEntry | undefined> {
         return new Promise((resolve, reject) => {
-            this.db!.get('SELECT * FROM contexts WHERE id = ?', [id], (err: any, row: ContextRow | undefined) => {
+            this.db!.get('SELECT * FROM contexts WHERE id = ?', [id], (err: any, row?: any) => {
                 if (err) reject(err);
                 else resolve(row ? this.rowToContextEntry(row) : undefined);
             });
@@ -173,9 +173,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 params.push(options.offset);
             }
             
-            this.db!.all(query, params, (err: any, rows: ContextRow[]) => {
+            this.db!.all(query, params, (err: any, rows?: any[]) => {
                 if (err) reject(err);
-                else resolve(rows.map(this.rowToContextEntry));
+                else resolve((rows || []).map(this.rowToContextEntry));
             });
         });
     }
@@ -217,9 +217,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
             sql += ' ORDER BY timestamp DESC';
 
-            this.db!.all(sql, params, (err: any, rows: ContextRow[]) => {
+            this.db!.all(sql, params, (err: any, rows?: any[]) => {
                 if (err) reject(err);
-                else resolve(rows.map(this.rowToContextEntry));
+                else resolve((rows || []).map(this.rowToContextEntry));
             });
         });
     }
@@ -232,9 +232,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 query += ' WHERE type = ?';
                 params.push(options.type);
             }
-            this.db!.get(query, params, (err: any, row: { count: number }) => {
+            this.db!.get(query, params, (err: any, row?: any) => {
                 if (err) reject(err);
-                else resolve(row.count);
+                else resolve(row ? row.count : 0);
             });
         });
     }
@@ -266,7 +266,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getAgentById(id: string): Promise<DatabaseAgent | undefined> {
         return new Promise((resolve, reject) => {
-            this.db!.get('SELECT * FROM agents WHERE id = ?', [id], (err: any, row: AgentRow | undefined) => {
+            this.db!.get('SELECT * FROM agents WHERE id = ?', [id], (err: any, row?: any) => {
                 if (err) reject(err);
                 else resolve(row ? this.rowToAgent(row) : undefined);
             });
@@ -275,9 +275,9 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     async getAllAgents(): Promise<DatabaseAgent[]> {
         return new Promise((resolve, reject) => {
-            this.db!.all('SELECT * FROM agents ORDER BY isCustom ASC, name ASC', (err: any, rows: AgentRow[]) => {
+            this.db!.all('SELECT * FROM agents ORDER BY isCustom ASC, name ASC', (err: any, rows?: any[]) => {
                 if (err) reject(err);
-                else resolve(rows.map(this.rowToAgent));
+                else resolve((rows || []).map(this.rowToAgent));
             });
         });
     }
@@ -333,11 +333,11 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
 
     private async getGroupedCount(field: 'type' | 'projectPath'): Promise<Record<string, number>> {
         return new Promise((resolve, reject) => {
-            this.db!.all(`SELECT ${field}, COUNT(*) as count FROM contexts GROUP BY ${field}`, (err: any, rows: any[]) => {
+            this.db!.all(`SELECT ${field}, COUNT(*) as count FROM contexts GROUP BY ${field}`, (err: any, rows?: any[]) => {
                 if (err) reject(err);
                 else {
                     const result: Record<string, number> = {};
-                    rows.forEach(row => {
+                    (rows || []).forEach(row => {
                         result[row[field]] = row.count;
                     });
                     resolve(result);
