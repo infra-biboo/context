@@ -130,7 +130,8 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
-          // SQLite3 binaries are managed by CI pipeline, no need to copy here
+          // Copy SQLite3 binaries to dist for packaging
+          { from: 'binaries/', to: 'binaries/' },
           // No need to copy index.html as it's generated in the provider
         ],
       }),

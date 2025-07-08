@@ -60,11 +60,8 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
             Logger.warn('Failed to load @vscode/sqlite3 module, trying binary loading strategy:', error as Error);
         }
         
-        // Strategy 2: Create a custom module that mimics @vscode/sqlite3 structure
+        // Strategy 2: Create a custom module that mimics @vscode/sqlite3 structure\n        let extensionPath: string | undefined;\n        let binaryName: string = '';
         // by loading our compiled binary and wrapping it with the proper JavaScript layer
-        let extensionPath: string | undefined;
-        let binaryName: string = '';
-        
         try {
             extensionPath = vscode.extensions.getExtension('claude-dev.claude-context-manager')?.extensionPath;
             if (extensionPath) {
@@ -80,6 +77,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
                 }
                 
                 // Determine binary name based on platform
+                let binaryName;
                 if (platform === 'win32') {
                     binaryName = 'vscode-sqlite3-win32-x64.node';
                 } else if (platform === 'darwin') {
@@ -128,7 +126,7 @@ export class SQLiteAdapter extends BaseDatabaseAdapter {
         // Final failure - list what we tried
         Logger.error(`Failed to load SQLite3 module for platform: ${platform}, arch: ${arch}`);
         Logger.error(`Attempted paths:`);
-        if (extensionPath && binaryName) {
+        if (extensionPath) {
             Logger.error(`  - Extension binaries: ${path.join(extensionPath, 'binaries', binaryName)}`);
         }
         const errorMessage = `Failed to load SQLite3 module. No suitable binary or module found for platform: ${platform}, arch: ${arch}`;

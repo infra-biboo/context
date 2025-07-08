@@ -19,10 +19,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v20
+      - name: Setup Node.js v22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Python for node-gyp
         uses: actions/setup-python@v4
@@ -53,7 +53,7 @@ jobs:
 
       - name: Build sqlite3 binding (x64)
         shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=x64
+        run: npm rebuild @vscode/sqlite3 --build-from-source --runtime=electron --target=35.5.1 --target_arch=x64 --dist-url=https://electronjs.org/headers
 
       - name: Copy x64 .node with correct naming
         shell: bash
@@ -81,10 +81,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v20
+      - name: Setup Node.js v22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Python for node-gyp
         uses: actions/setup-python@v4
@@ -102,7 +102,7 @@ jobs:
 
       - name: Build sqlite3 binding (arm64)
         shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --target_arch=arm64
+        run: npm rebuild @vscode/sqlite3 --build-from-source --runtime=electron --target=35.5.1 --target_arch=arm64 --dist-url=https://electronjs.org/headers
 
       - name: Copy arm64 .node
         shell: bash
@@ -125,10 +125,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v20
+      - name: Setup Node.js v22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # Download each artifact flattening into binaries/
       - name: Download Linux x64 binaries

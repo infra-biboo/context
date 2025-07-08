@@ -81,6 +81,12 @@ export class DatabaseFactory {
         }
         break;
         
+      case 'sqlite':
+        if (!config.sqlite?.path) {
+          errors.push('SQLite path is required');
+        }
+        break;
+        
       case 'postgresql':
         if (!config.postgresql) {
           errors.push('PostgreSQL configuration is required');
@@ -139,6 +145,14 @@ export class DatabaseFactory {
           }
         };
         
+      case 'sqlite':
+        return {
+          type: 'sqlite',
+          sqlite: {
+            path: process.env.SQLITE_PATH || './contexts.db'
+          }
+        };
+        
       case 'postgresql':
         return {
           type: 'postgresql',
@@ -191,7 +205,7 @@ export class DatabaseFactory {
    * Get available adapter types
    */
   static getAvailableTypes(): DatabaseConfig['type'][] {
-    return ['json']; // TODO: Add 'postgresql', 'hybrid' when implemented
+    return ['json', 'sqlite']; // PostgreSQL and hybrid pending implementation
   }
 
   /**
