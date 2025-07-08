@@ -49,6 +49,7 @@ src/
 ├── commands/       # VS Code commands
 └── utils/          # Utilities
 ```
+GO
 
 ## Current Status
 
