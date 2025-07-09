@@ -6,6 +6,7 @@ export interface DatabaseConfig {
   };
   sqlite?: {
     path: string;
+    extensionPath?: string;
   };
   postgresql?: {
     host: string;

@@ -20,7 +20,13 @@ export class ContextDatabase {
         config?: DatabaseConfig
     ) {
         // Use provided config or create default SQLite configuration
-        const dbConfig = config || this.createDefaultConfig();
+        let dbConfig = config || this.createDefaultConfig();
+        
+        // Ensure extensionPath is set for SQLite configs
+        if (dbConfig.type === 'sqlite' && dbConfig.sqlite && !dbConfig.sqlite.extensionPath) {
+            dbConfig.sqlite.extensionPath = this.extensionContext.extensionPath;
+        }
+        
         this.currentConfig = dbConfig;
         
         try {
@@ -305,7 +311,10 @@ export class ContextDatabase {
         
         return {
             type: 'sqlite', // <--- Cambiar a 'sqlite'
-            sqlite: { path: dbPath }
+            sqlite: { 
+                path: dbPath,
+                extensionPath: this.extensionContext.extensionPath
+            }
         };
     }
 

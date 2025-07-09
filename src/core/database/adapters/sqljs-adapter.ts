@@ -44,26 +44,34 @@ export class SqlJsAdapter extends BaseDatabaseAdapter {
 
     private async loadSqlJs(): Promise<SqlJsStatic> {
         try {
-            // Get the extension path
-            const extensionPath = path.dirname(path.dirname(path.dirname(path.dirname(__dirname))));
-            const wasmPath = path.join(extensionPath, 'dist', 'assets', 'sql-wasm.wasm');
+            // Get the extension path from config or try to calculate it
+            let extensionPath: string;
             
-            // Check if wasm file exists
-            if (!fs.existsSync(wasmPath)) {
-                // Fallback: try to load from node_modules
-                const fallbackWasmPath = path.join(extensionPath, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-                if (fs.existsSync(fallbackWasmPath)) {
-                    const wasmBuffer = fs.readFileSync(fallbackWasmPath);
+            if (this.config && this.config.extensionPath) {
+                extensionPath = this.config.extensionPath;
+                Logger.debug(`Using extension path from config: ${extensionPath}`);
+            } else {
+                // Fallback: try to calculate from __dirname
+                extensionPath = path.dirname(path.dirname(path.dirname(path.dirname(__dirname))));
+                Logger.warn(`Extension path not provided in config, calculated: ${extensionPath}`);
+            }
+            
+            // Try multiple possible locations for the WASM file
+            const possiblePaths = [
+                path.join(extensionPath, 'dist', 'assets', 'sql-wasm.wasm'), // Production
+                path.join(extensionPath, 'src', 'assets', 'sql-wasm.wasm'), // Development
+                path.join(extensionPath, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'), // Fallback
+            ];
+            
+            for (const wasmPath of possiblePaths) {
+                if (fs.existsSync(wasmPath)) {
+                    Logger.info(`Found WASM file at: ${wasmPath}`);
+                    const wasmBuffer = fs.readFileSync(wasmPath);
                     return await initSqlJs({ wasmBinary: wasmBuffer });
-                } else {
-                    throw new Error(`WASM file not found at ${wasmPath} or ${fallbackWasmPath}`);
                 }
             }
-
-            const wasmBuffer = fs.readFileSync(wasmPath);
-            const SQL = await initSqlJs({ wasmBinary: wasmBuffer });
-            Logger.info('✅ Successfully loaded sql.js with WebAssembly');
-            return SQL;
+            
+            throw new Error(`WASM file not found in any of these locations: ${possiblePaths.join(', ')}`);
         } catch (error) {
             const errorMessage = `Failed to load sql.js: ${(error as Error).message}`;
             Logger.error(errorMessage, error as Error);
