@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "claude-context-manager": {
+      "command": "node",
+      "args": [
+        "/Users/biboo/.vscode/extensions/claude-dev.claude-context-manager-0.2.1/dist/mcp-server.js"
+      ],
+      "env": {
+        "WORKSPACE_PATH": "/Users/biboo/Documents/Proyects/Context-Manager-AI"
+      }
+    }
+  }
+}

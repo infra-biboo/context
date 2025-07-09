@@ -7,7 +7,6 @@ tsconfig.json
 
 *.vsix
 .github/**
-binaries/**
 *.log
 *.map
 *.md
@@ -19,6 +18,20 @@ binaries/**
 **/tests/**
 coverage/**
 
-# Ensure SQLite3 is included
-!node_modules/@vscode/sqlite3/**
-!dist/binaries/**
+# Exclude most node_modules, only include sql.js
+node_modules/**
+!node_modules/sql.js/**
+
+# Exclude source maps and other dev files
+**/*.map
+**/.git
+**/.DS_Store
+**/node_modules/.cache/**
+
+# Include only essential dist files
+!dist/extension.js
+!dist/mcp-server.js
+!dist/webview.js
+!dist/index.html
+!dist/style.css
+!dist/assets/sql-wasm.wasm

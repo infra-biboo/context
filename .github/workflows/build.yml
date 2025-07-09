@@ -1,4 +1,4 @@
-name: Build & Package Multi-Platform VSIX
+name: Build & Package VSIX
 
 on:
   push:
@@ -7,120 +7,10 @@ on:
     branches: [ main ]
 
 jobs:
-  # 1) Build x64 binaries on GitHub-hosted runners (Linux, Windows, macOS Intel)
-  build-binaries-x64:
-    name: Build sqlite3 on ${{ matrix.os }}-x64
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js v22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Python for node-gyp
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Install build essentials on Linux
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          sudo apt-get update && sudo apt-get install -y build-essential
-
-      - name: Confirm macOS CLI on Intel
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          echo "macOS Intel runner"
-
-      - name: Confirm Python on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python --version
-
-      - name: Install dependencies without scripts
-        shell: bash
-        run: npm ci --ignore-scripts
-
-      - name: Build sqlite3 binding (x64)
-        shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --runtime=electron --target=35.5.1 --target_arch=x64 --dist-url=https://electronjs.org/headers
-
-      - name: Copy x64 .node with correct naming
-        shell: bash
-        run: |
-          mkdir -p binaries
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-linux-x64.node
-          elif [ "${{ runner.os }}" == "Windows" ]; then
-            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-win32-x64.node
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-x64.node
-          fi
-
-      - name: Upload x64 binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: sqlite3-binaries-${{ matrix.os }}-x64
-          path: binaries/
-
-  # 2) Build arm64 macOS binary on GitHub-hosted ARM64 runner
-  build-binaries-macos-arm64:
-    name: Build sqlite3 on macOS-arm64
-    runs-on: macos-14
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js v22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Python for node-gyp
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Confirm ARM64 runner
-        shell: bash
-        run: |
-          echo "macOS ARM64 runner"
-
-      - name: Install dependencies without scripts
-        shell: bash
-        run: npm ci --ignore-scripts
-
-      - name: Build sqlite3 binding (arm64)
-        shell: bash
-        run: npm rebuild @vscode/sqlite3 --build-from-source --runtime=electron --target=35.5.1 --target_arch=arm64 --dist-url=https://electronjs.org/headers
-
-      - name: Copy arm64 .node
-        shell: bash
-        run: |
-          mkdir -p binaries
-          cp node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node binaries/vscode-sqlite3-darwin-arm64.node
-
-      - name: Upload arm64 macOS binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: sqlite3-binaries-macos-arm64
-          path: binaries/
-
-  # 3) Create macOS Universal2 & package VSIX
+  # Single job to build and package VSIX using sql.js (no native binaries needed)
   package-vsix:
-    name: Download binaries & package VSIX
-    runs-on: macos-13  # Intel runner with lipo
-    needs: [build-binaries-x64, build-binaries-macos-arm64]
+    name: Build and package VSIX
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -130,212 +20,42 @@ jobs:
         with:
           node-version: '22'
 
-      # Download each artifact flattening into binaries/
-      - name: Download Linux x64 binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: sqlite3-binaries-ubuntu-latest-x64
-          path: binaries
-
-      - name: Download Windows x64 binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: sqlite3-binaries-windows-latest-x64
-          path: binaries
-
-      - name: Download macOS Intel x64 binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: sqlite3-binaries-macos-13-x64
-          path: binaries
-
-      - name: Download macOS ARM64 binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: sqlite3-binaries-macos-arm64
-          path: binaries
-
-      # Verificar que los archivos existan antes de continuar
-      - name: List downloaded binaries
+      - name: Install dependencies
         shell: bash
         run: |
-          echo "Downloaded binaries:"
-          ls -la binaries/
-          echo "Checking required files:"
-          ls -la binaries/vscode-sqlite3-*.node || echo "Some binary files missing"
+          echo "Installing dependencies..."
+          npm ci
 
-      - name: Install Xcode CLI Tools (if needed)
+      - name: Install vsce
         shell: bash
         run: |
-          # Check if Xcode CLI tools are already installed
-          if ! xcode-select -p &> /dev/null; then
-            echo "Installing Xcode CLI tools..."
-            xcode-select --install
-            # Wait for installation to complete
-            until xcode-select -p &> /dev/null; do
-              sleep 5
-            done
-          else
-            echo "Xcode CLI tools already installed"
-          fi
-
-      - name: Create macOS Universal2
-        shell: bash
-        run: |
-          if [ -f "binaries/vscode-sqlite3-darwin-x64.node" ] && [ -f "binaries/vscode-sqlite3-darwin-arm64.node" ]; then
-            lipo -create \
-              binaries/vscode-sqlite3-darwin-x64.node \
-              binaries/vscode-sqlite3-darwin-arm64.node \
-              -output binaries/vscode-sqlite3-darwin-universal2.node
-            echo "Universal2 binary created successfully"
-            lipo -info binaries/vscode-sqlite3-darwin-universal2.node
-          else
-            echo "Error: Required macOS binaries not found"
-            exit 1
-          fi
-
-      - name: Prepare binaries for packaging
-        shell: bash
-        run: |
-          # Create the directory structure that the extension expects
-          mkdir -p dist/binaries/
-          
-          # Copy all platform binaries to dist/binaries/
-          cp binaries/vscode-sqlite3-linux-x64.node dist/binaries/ 2>/dev/null || echo "Linux binary not found"
-          cp binaries/vscode-sqlite3-win32-x64.node dist/binaries/ 2>/dev/null || echo "Windows binary not found"
-          cp binaries/vscode-sqlite3-darwin-universal2.node dist/binaries/ 2>/dev/null || echo "macOS universal binary not found"
-          
-          echo "Binaries prepared for packaging:"
-          ls -la dist/binaries/
-
-      - name: Install project dependencies
-        shell: bash
-        run: |
-          echo "Installing dependencies without running postinstall scripts..."
-          npm ci --ignore-scripts
-          
-          echo "Setting up SQLite3 module structure..."
-          # Create the necessary structure for SQLite3
-          mkdir -p node_modules/@vscode/sqlite3/lib
-          mkdir -p node_modules/@vscode/sqlite3/build/Release
-          
-          # Copy the appropriate binary for the current platform
-          if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
-            echo "Copying macOS universal binary to SQLite3 module..."
-            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-            cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/lib/vscode-sqlite3-darwin-universal2.node
-          fi
-          
-          echo "SQLite3 module structure:"
-          ls -la node_modules/@vscode/sqlite3/build/Release/ || echo "No Release directory"
-          ls -la node_modules/@vscode/sqlite3/lib/ || echo "No lib directory"
-
-      - name: Install vsce only
-        shell: bash
-        run: |
-          # Install vsce globally
           npm install -g @vscode/vsce
-
-      
-
-      - name: Setup SQLite3 binaries for dynamic loading
-        shell: bash
-        run: |
-          echo "Setting up SQLite3 binaries for dynamic loading strategy..."
-          
-          # SQLite3 binaries are now exclusively managed in dist/binaries/
-          # No need to copy to dist/ root or set up webpack CopyPlugin paths
-          # The sqlite-adapter.ts has been updated to look in dist/binaries/ first
-          
-          echo "✓ SQLite3 binaries already prepared in dist/binaries/ by previous step"
-          echo "✓ Dynamic loading will use CI-managed binaries only"
 
       - name: Build extension with webpack
         shell: bash
         run: |
           echo "Building extension with webpack..."
-          
-          # First try the standard build
-          if npm run package; then
-            echo "✓ Build completed successfully"
-          else
-            echo "⚠️  Build had errors, checking if they're TypeScript-related..."
-            
-            # Try building with TypeScript error tolerance
-            echo "Attempting build with error tolerance..."
-            npm run compile || {
-              echo "Warning: TypeScript compilation failed, but continuing with packaging"
-              echo "This may be due to SQLite3 type issues in CI environment"
-            }
-          fi
+          npm run package
 
-      - name: Verify vsce installation
+      - name: Verify VSIX packaging structure
         shell: bash
-        run: vsce --version
+        run: |
+          echo "Verifying extension structure..."
+          echo "Checking for sql.js wasm file:"
+          ls -la dist/assets/sql-wasm.wasm || echo "WASM file not found"
+          
+          echo "Checking compiled extension:"
+          ls -la dist/extension.js || echo "Extension JS not found"
 
       - name: Package VSIX
         shell: bash
         run: |
           echo "Packaging VSIX..."
+          vsce package --no-yarn --out claude-context-manager.vsix
           
-          # Verify extension structure
-          echo "Checking extension structure:"
-          ls -la dist/ || echo "No dist directory found"
-          ls -la node_modules/@vscode/sqlite3/ || echo "No SQLite3 module found"
-          
-          # Package VSIX with SQLite3 included
-          echo "Creating VSIX package..."
-          
-          # First, ensure SQLite3 has the correct structure for packaging
-          echo "Preparing SQLite3 module for packaging..."
-          if [ -f "node_modules/@vscode/sqlite3/package.json" ]; then
-            echo "✓ SQLite3 module found"
-            
-            # Create necessary directories
-            mkdir -p node_modules/@vscode/sqlite3/lib
-            mkdir -p node_modules/@vscode/sqlite3/build/Release
-            
-            # Copy all platform binaries to the lib directory
-            echo "Copying all platform binaries to SQLite3 lib directory..."
-            for binary in binaries/vscode-sqlite3-*.node; do
-              if [ -f "$binary" ]; then
-                cp "$binary" node_modules/@vscode/sqlite3/lib/
-                echo "✓ Copied $(basename $binary)"
-              fi
-            done
-            
-            # Also copy the macOS universal binary to build/Release for the packaging machine
-            if [ -f "binaries/vscode-sqlite3-darwin-universal2.node" ]; then
-              cp binaries/vscode-sqlite3-darwin-universal2.node node_modules/@vscode/sqlite3/build/Release/vscode-sqlite3.node
-              echo "✓ Copied macOS universal binary to build/Release for packaging"
-            fi
-          fi
-          
-          if vsce package --no-yarn --out claude-context-manager.vsix; then
-            echo "✓ VSIX package created successfully"
-          else
-            echo "❌ Primary packaging failed, trying with additional flags"
-            if vsce package --no-yarn --allow-star-activation --skip-license --out claude-context-manager.vsix; then
-              echo "✓ VSIX package created with additional flags"
-            else
-              echo "❌ All packaging attempts failed"
-              echo "Package.json content:"
-              cat package.json
-              echo "Extension structure:"
-              find . -name "*.js" -path "./dist/*" | head -10
-              exit 1
-            fi
-          fi
-          
-          # Verify the package was created and show its contents
-          if [ -f "claude-context-manager.vsix" ]; then
-            echo "✓ VSIX package created successfully"
-            ls -la claude-context-manager.vsix
-            echo "Package size: $(du -h claude-context-manager.vsix | cut -f1)"
-          else
-            echo "❌ VSIX package creation failed"
-            exit 1
-          fi
+          echo "VSIX package created successfully:"
+          ls -la claude-context-manager.vsix
+          echo "Package size: $(du -h claude-context-manager.vsix | cut -f1)"
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
@@ -343,11 +63,11 @@ jobs:
           name: claude-context-manager.vsix
           path: claude-context-manager.vsix
 
-  # 4) Validate VSIX on multiple platforms
+  # Validate VSIX on multiple platforms
   validate-vsix:
     name: Validate VSIX on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: package-vsix # Depends on the VSIX being packaged
+    needs: package-vsix
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -370,10 +90,8 @@ jobs:
       - name: Install dependencies for validation script
         shell: bash
         run: |
-          echo "Installing dependencies without postinstall scripts..."
-          npm ci --ignore-scripts
-          
-          echo "Note: SQLite3 binaries will be validated from within the VSIX package"
+          echo "Installing dependencies for validation..."
+          npm ci
 
       - name: Run VSIX validation script
         shell: bash

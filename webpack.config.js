@@ -29,9 +29,8 @@ module.exports = [
       ]
     },
     externals: {
-      vscode: 'commonjs vscode',
-      '@vscode/sqlite3': 'commonjs @vscode/sqlite3'
-      // Note: @vscode/sqlite3 removed from externals - will be loaded dynamically
+      vscode: 'commonjs vscode'
+      // sql.js will be bundled normally, no need to externalize
     },
     devtool: 'source-map',
   },
@@ -131,8 +130,8 @@ module.exports = [
       new CopyPlugin({
         patterns: [
           { from: 'src/ui/webview/style.css', to: 'style.css' },
-          // Copy SQLite3 binaries to dist for packaging
-          { from: 'binaries/', to: 'binaries/' },
+          // Copy sql.js wasm file to dist for packaging
+          { from: 'src/assets/sql-wasm.wasm', to: 'assets/sql-wasm.wasm' },
           // No need to copy index.html as it's generated in the provider
         ],
       }),

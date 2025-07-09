@@ -1,7 +1,7 @@
 import { DatabaseAdapter } from './database-adapter';
 import { DatabaseConfig } from './types';
 import { JSONAdapter } from './adapters/json-adapter';
-import { SQLiteAdapter } from './adapters/sqlite-adapter'; // Añadir import
+import { SqlJsAdapter } from './adapters/sqljs-adapter';
 import { Logger } from '../../utils/logger';
 
 export class DatabaseFactory {
@@ -14,7 +14,7 @@ export class DatabaseFactory {
         if (!config.sqlite) {
           throw new Error('SQLite configuration required for sqlite adapter');
         }
-        return new SQLiteAdapter(config.sqlite);
+        return new SqlJsAdapter(config.sqlite);
 
       case 'json':
         if (!config.json) {
